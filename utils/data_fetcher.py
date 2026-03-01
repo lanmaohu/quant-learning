@@ -21,12 +21,28 @@ except ImportError:
 class DataFetcher:
     """
     数据获取类（终极版）
-    优先使用真实数据源（Baostock/Yahoo），失败时使用模拟数据
+    数据源优先级:
+    1. Tushare Pro (如果有token，数据质量最高)
+    2. Baostock/Yahoo (免费真实数据)
+    3. 本地离线CSV
+    4. 模拟数据（最后备选）
     """
     
     def __init__(self, data_dir='./data', tushare_token=None):
         self.data_dir = data_dir
         os.makedirs(data_dir, exist_ok=True)
+        self.tushare_token = tushare_token
+        
+        # Tushare (数据质量最高，需要token)
+        self._tushare = None
+        if tushare_token:
+            try:
+                import tushare as ts
+                ts.set_token(tushare_token)
+                self._tushare = ts.pro_api()
+                print("✅ Tushare Pro 已激活")
+            except Exception as e:
+                print(f"⚠️ Tushare 初始化失败: {e}")
         
         # 智能数据获取器（优先真实数据）
         self._smart_fetcher = SmartDataFetcher()
@@ -48,23 +64,34 @@ class DataFetcher:
         获取股票日线数据（优先真实数据）
         
         尝试顺序:
-        1. Baostock (A股免费数据)
-        2. Yahoo Finance (港股通标的)
-        3. 本地离线CSV
-        4. 模拟数据（最后备选）
+        1. Tushare Pro (如果有token，数据质量最高)
+        2. Baostock (A股免费数据)
+        3. Yahoo Finance (港股通标的)
+        4. 本地离线CSV
+        5. 模拟数据（最后备选）
         """
         print(f"[DataFetcher] 获取 {symbol} 从 {start_date} 到 {end_date} 的数据...")
         
-        # 首先尝试获取真实数据
+        # 1. 优先使用 Tushare (数据质量最高)
+        if self._tushare is not None:
+            try:
+                print("🔄 尝试使用 Tushare Pro...")
+                df = self._get_tushare_data(symbol, start_date, end_date)
+                print(f"✅ Tushare 成功！")
+                return df
+            except Exception as e:
+                print(f"   ⚠️ Tushare 失败: {e}")
+        
+        # 2. 尝试其他真实数据源
         try:
             df = self._smart_fetcher.get_daily_data(symbol, start_date, end_date)
             print(f"✅ 成功获取真实数据！")
             return df
         except Exception as e:
-            print(f"⚠️ 真实数据获取失败: {e}")
+            print(f"⚠️ 其他数据源失败: {e}")
             print("   切换到备选方案...")
         
-        # 备选：使用原有的统一获取器（含模拟数据）
+        # 3. 使用模拟数据
         try:
             df = self._fallback_fetcher.get_daily_data(
                 symbol, start_date, end_date,
@@ -79,6 +106,45 @@ class DataFetcher:
             return df
         except Exception as e:
             raise Exception(f"所有数据源都失败: {e}")
+    
+    def _get_tushare_data(self, symbol, start_date, end_date):
+        """使用 Tushare 获取数据"""
+        # 转换代码格式
+        if symbol.startswith('6'):
+            ts_code = f"{symbol}.SH"
+        else:
+            ts_code = f"{symbol}.SZ"
+        
+        df = self._tushare.daily(
+            ts_code=ts_code,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        if df.empty:
+            raise Exception("返回数据为空")
+        
+        # 标准化数据格式
+        df['trade_date'] = pd.to_datetime(df['trade_date'])
+        df.set_index('trade_date', inplace=True)
+        df.sort_index(inplace=True)
+        
+        df = df.rename(columns={
+            'open': 'open',
+            'high': 'high',
+            'low': 'low',
+            'close': 'close',
+            'vol': 'volume',
+            'amount': 'amount',
+            'pct_chg': 'pct_change',
+            'change': 'change'
+        })
+        
+        # 计算振幅
+        df['amplitude'] = (df['high'] - df['low']) / df['pre_close'] * 100
+        df['turnover'] = df.get('turnover_rate', 0)
+        
+        return df
     
     def get_index_data_ak(self, symbol='000300', start_date=None, end_date=None):
         """
@@ -181,7 +247,17 @@ def test_data_fetcher():
     print("🧪 测试数据获取器（优先真实数据）")
     print("=" * 70)
     
-    fetcher = DataFetcher()
+    # 尝试使用 Tushare（需要token）
+    import os
+    tushare_token = os.environ.get('TUSHARE_TOKEN')
+    
+    if tushare_token:
+        print("\n🔑 检测到 Tushare Token，将优先使用 Tushare Pro")
+        fetcher = DataFetcher(tushare_token=tushare_token)
+    else:
+        print("\n💡 提示: 设置 Tushare Token 可获得更高质量数据")
+        print("   获取方式: https://tushare.pro/user/token")
+        fetcher = DataFetcher()
     
     # 1. 获取股票列表
     print("\n📋 获取A股股票列表:")
