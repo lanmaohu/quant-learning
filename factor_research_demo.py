@@ -30,6 +30,8 @@ def demo_single_stock_factor_research():
     fetcher = DataFetcher()
     end_date = datetime.now().strftime('%Y%m%d')
     start_date = (datetime.now() - timedelta(days=730)).strftime('%Y%m%d')
+
+    
     
     print(f"   获取平安银行(000001) 从 {start_date} 到 {end_date} 的数据...")
     df = fetcher.get_daily_data_ak('000001', start_date, end_date)
