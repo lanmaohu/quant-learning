@@ -10,6 +10,13 @@ from sklearn.linear_model import Ridge, Lasso
 from sklearn.ensemble import RandomForestRegressor
 import lightgbm as lgb
 
+try:
+    from utils.logger import get_logger
+except ImportError:
+    from logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class FactorSynthesizer:
     """
@@ -37,9 +44,9 @@ class FactorSynthesizer:
         weights = pd.Series({col: abs(ic_values.get(col, 0)) for col in factor_cols})
         weights = weights / weights.sum()  # 归一化
         
-        print("📊 IC权重分配:")
+        logger.info("📊 IC权重分配:")
         for col, w in weights.items():
-            print(f"   {col}: {w:.4f}")
+            logger.info(f"   {col}: {w:.4f}")
         
         composite = pd.Series(0, index=factor_df.index)
         for col in factor_cols:
@@ -67,9 +74,9 @@ class FactorSynthesizer:
         weights = pd.Series(ir_values)
         weights = weights / weights.sum()
         
-        print("📊 IR权重分配:")
+        logger.info("📊 IR权重分配:")
         for col, w in weights.items():
-            print(f"   {col}: {w:.4f} (IR={ir_values[col]:.4f})")
+            logger.info(f"   {col}: {w:.4f} (IR={ir_values[col]:.4f})")
         
         composite = pd.Series(0, index=factor_df.index)
         for col in factor_cols:
@@ -112,9 +119,9 @@ class FactorSynthesizer:
         
         weights = weights / weights.abs().sum()
         
-        print(f"📊 ML({model_type})权重分配:")
+        logger.info(f"📊 ML({model_type})权重分配:")
         for col, w in weights.items():
-            print(f"   {col}: {w:.4f}")
+            logger.info(f"   {col}: {w:.4f}")
         
         # 预测值作为复合因子
         composite = pd.Series(model.predict(X), index=factor_df.index)
@@ -133,8 +140,8 @@ class FactorSynthesizer:
         pca = PCA(n_components=n_components)
         components = pca.fit_transform(X)
         
-        print(f"📊 PCA解释方差比: {pca.explained_variance_ratio_}")
-        print(f"   累计解释方差: {pca.explained_variance_ratio_.sum():.2%}")
+        logger.info(f"📊 PCA解释方差比: {pca.explained_variance_ratio_}")
+        logger.info(f"   累计解释方差: {pca.explained_variance_ratio_.sum():.2%}")
         
         # 使用第一主成分
         return pd.Series(components[:, 0], index=factor_df.index)
@@ -166,9 +173,9 @@ class MultiFactorStrategy:
             
             if ic_mean >= min_ic and ic_ir >= min_ir:
                 selected.append(factor_name)
-                print(f"✅ 选中因子: {factor_name} (IC={ic_mean:.4f}, IR={ic_ir:.4f})")
+                logger.info(f"✅ 选中因子: {factor_name} (IC={ic_mean:.4f}, IR={ic_ir:.4f})")
             else:
-                print(f"❌ 过滤因子: {factor_name} (IC={ic_mean:.4f}, IR={ic_ir:.4f})")
+                logger.info(f"❌ 过滤因子: {factor_name} (IC={ic_mean:.4f}, IR={ic_ir:.4f})")
         
         self.selected_factors = selected
         return selected
@@ -270,26 +277,26 @@ class FactorResearchPipeline:
             原始股票数据（含OHLCV）
         **kwargs : 配置参数
         """
-        print("=" * 70)
-        print("🚀 启动完整因子研究流水线")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("🚀 启动完整因子研究流水线")
+        logger.info("=" * 70)
         
         # Step 1: 数据预处理
-        print("\n📌 Step 1: 数据预处理")
+        logger.info("\n📌 Step 1: 数据预处理")
         df = self.data_processor.clean_price_data(raw_df)
         df = self.data_processor.calculate_returns(df, periods=[5, 10, 20])
         
         # Step 2: 计算因子
-        print("\n📌 Step 2: 计算原始因子")
+        logger.info("\n📌 Step 2: 计算原始因子")
         df = self.factor_calc.calculate_all_factors(df)
         
         if factor_cols is None:
             factor_cols = self.factor_calc.get_factor_list(df)
         
-        print(f"   共计算 {len(factor_cols)} 个因子")
+        logger.info(f"   共计算 {len(factor_cols)} 个因子")
         
         # Step 3: 因子预处理
-        print("\n📌 Step 3: 因子预处理")
+        logger.info("\n📌 Step 3: 因子预处理")
         df = self.preprocessor.preprocess_pipeline(
             df, factor_cols,
             winsorize_method='mad',
@@ -297,11 +304,11 @@ class FactorResearchPipeline:
         )
         
         # Step 4: 因子有效性检验
-        print("\n📌 Step 4: 因子有效性检验")
+        logger.info("\n📌 Step 4: 因子有效性检验")
         factor_results = {}
         
         for factor in factor_cols[:5]:  # 只测试前5个作为示例
-            print(f"\n   测试因子: {factor}")
+            logger.info(f"\n   测试因子: {factor}")
             result = self.analyzer.generate_factor_report(
                 df, factor, 
                 return_col='return_5d',
@@ -310,7 +317,7 @@ class FactorResearchPipeline:
             factor_results[factor] = result['ic_stats']
         
         # Step 5: 多因子合成
-        print("\n📌 Step 5: 多因子合成")
+        logger.info("\n📌 Step 5: 多因子合成")
         selected_factors = self.strategy.select_factors(factor_results, min_ic=0.01, min_ir=0.1)
         
         if len(selected_factors) >= 2:
@@ -320,14 +327,14 @@ class FactorResearchPipeline:
             df['composite_factor'] = composite
             
             # 测试复合因子
-            print("\n📌 Step 6: 复合因子效果测试")
+            logger.info("\n📌 Step 6: 复合因子效果测试")
             composite_result = self.analyzer.generate_factor_report(
                 df, 'composite_factor', return_col='return_5d'
             )
         
-        print("\n" + "=" * 70)
-        print("✅ 因子研究流水线完成！")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info("✅ 因子研究流水线完成！")
+        logger.info("=" * 70)
         
         return df, factor_results
 

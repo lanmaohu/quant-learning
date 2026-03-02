@@ -3,16 +3,24 @@
 Day 6-7: 数据清洗、复权处理、异常值处理
 """
 
+from typing import Optional, List, Dict, Union, Tuple, Callable, Any
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+
+try:
+    from utils.logger import get_logger
+except ImportError:
+    from logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class DataProcessor:
     """数据处理器：清洗、预处理、格式标准化"""
     
     @staticmethod
-    def clean_price_data(df):
+    def clean_price_data(df: pd.DataFrame) -> pd.DataFrame:
         """
         清洗价格数据
         - 处理停牌日（向前填充）
@@ -38,14 +46,18 @@ class DataProcessor:
             # 成交量为0或NaN视为停牌，价格向前填充
             mask = (df['volume'] == 0) | df['volume'].isna()
             df.loc[mask, price_cols] = np.nan
-            df[price_cols] = df[price_cols].fillna(method='ffill')
+            df[price_cols] = df[price_cols].ffill()
         
         # 5. 删除连续停牌过多的股票（可选）
         
         return df
     
     @staticmethod
-    def adjust_prices(df, adj_factor=None, method='forward'):
+    def adjust_prices(
+        df: pd.DataFrame, 
+        adj_factor: Optional[pd.Series] = None, 
+        method: str = 'forward'
+    ) -> pd.DataFrame:
         """
         价格复权处理
         
@@ -73,7 +85,11 @@ class DataProcessor:
         return df
     
     @staticmethod
-    def detect_outliers(df, method='mad', threshold=3):
+    def detect_outliers(
+        df: pd.DataFrame, 
+        method: str = 'mad', 
+        threshold: float = 3
+    ) -> pd.DataFrame:
         """
         检测价格异常值
         
@@ -110,7 +126,11 @@ class DataProcessor:
         return df
     
     @staticmethod
-    def resample_data(df, freq='W', agg_func=None):
+    def resample_data(
+        df: pd.DataFrame, 
+        freq: str = 'W', 
+        agg_func: Optional[Dict[str, Union[str, Callable]]] = None
+    ) -> pd.DataFrame:
         """
         数据重采样（日线转周线/月线）
         
@@ -140,7 +160,7 @@ class DataProcessor:
         return resampled
     
     @staticmethod
-    def fill_missing_dates(df, method='ffill'):
+    def fill_missing_dates(df: pd.DataFrame, method: str = 'ffill') -> pd.DataFrame:
         """
         填充缺失交易日（补全日期索引）
         """
@@ -150,14 +170,18 @@ class DataProcessor:
         df = df.reindex(all_dates)
         
         if method == 'ffill':
-            df.fillna(method='ffill', inplace=True)
+            df.ffill(inplace=True)
         elif method == 'interpolate':
             df.interpolate(method='linear', inplace=True)
         
         return df
     
     @staticmethod
-    def calculate_returns(df, periods=[1, 5, 20], price_col='close'):
+    def calculate_returns(
+        df: pd.DataFrame, 
+        periods: List[int] = [1, 5, 20], 
+        price_col: str = 'close'
+    ) -> pd.DataFrame:
         """
         计算收益率
         
@@ -181,24 +205,33 @@ class DataStore:
     数据存储管理（简单版，生产环境可用SQLite/PostgreSQL）
     """
     
-    def __init__(self, base_path='./data'):
+    def __init__(self, base_path: str = './data') -> None:
         self.base_path = base_path
         import os
         os.makedirs(base_path, exist_ok=True)
     
-    def save_stock_data(self, df, symbol, data_type='daily'):
+    def save_stock_data(
+        self, 
+        df: pd.DataFrame, 
+        symbol: str, 
+        data_type: str = 'daily'
+    ) -> str:
         """保存股票数据"""
         filepath = f"{self.base_path}/{symbol}_{data_type}.csv"
         df.to_csv(filepath)
         return filepath
     
-    def load_stock_data(self, symbol, data_type='daily'):
+    def load_stock_data(
+        self, 
+        symbol: str, 
+        data_type: str = 'daily'
+    ) -> pd.DataFrame:
         """加载股票数据"""
         filepath = f"{self.base_path}/{symbol}_{data_type}.csv"
         df = pd.read_csv(filepath, index_col=0, parse_dates=True)
         return df
     
-    def save_factor_data(self, df, factor_name):
+    def save_factor_data(self, df: pd.DataFrame, factor_name: str) -> str:
         """保存因子数据"""
         filepath = f"{self.base_path}/factor_{factor_name}.csv"
         df.to_csv(filepath)
@@ -207,7 +240,7 @@ class DataStore:
 
 # ============== 测试代码 ==============
 
-def test_data_processor():
+def test_data_processor() -> pd.DataFrame:
     """测试数据预处理功能"""
     print("=" * 60)
     print("🧪 测试数据预处理模块")

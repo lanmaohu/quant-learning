@@ -3,15 +3,28 @@
 Day 8: 技术指标因子 + 基础财务因子
 """
 
+from typing import Optional, List, Dict, Union, Tuple, Any
 import pandas as pd
 import numpy as np
+
+try:
+    from utils.logger import get_logger
+except ImportError:
+    from logger import get_logger
+
+logger = get_logger(__name__)
+
+from .constants import TRADING_DAYS_PER_YEAR
 
 
 class TechnicalFactorCalculator:
     """技术指标因子计算器"""
     
     @staticmethod
-    def moving_average(df, windows=[5, 10, 20, 60]):
+    def moving_average(
+        df: pd.DataFrame, 
+        windows: List[int] = [5, 10, 20, 60]
+    ) -> pd.DataFrame:
         """
         均线系统因子
         """
@@ -30,7 +43,7 @@ class TechnicalFactorCalculator:
         return df
     
     @staticmethod
-    def rsi(df, windows=[6, 12, 24]):
+    def rsi(df: pd.DataFrame, windows: List[int] = [6, 12, 24]) -> pd.DataFrame:
         """
         RSI相对强弱指标
         """
@@ -44,7 +57,12 @@ class TechnicalFactorCalculator:
         return df
     
     @staticmethod
-    def macd(df, fast=12, slow=26, signal=9):
+    def macd(
+        df: pd.DataFrame, 
+        fast: int = 12, 
+        slow: int = 26, 
+        signal: int = 9
+    ) -> pd.DataFrame:
         """
         MACD指标
         """
@@ -64,7 +82,11 @@ class TechnicalFactorCalculator:
         return df
     
     @staticmethod
-    def bollinger_bands(df, window=20, num_std=2):
+    def bollinger_bands(
+        df: pd.DataFrame, 
+        window: int = 20, 
+        num_std: float = 2
+    ) -> pd.DataFrame:
         """
         布林带因子
         """
@@ -88,7 +110,10 @@ class TechnicalFactorCalculator:
         return df
     
     @staticmethod
-    def volatility_factors(df, windows=[20, 60]):
+    def volatility_factors(
+        df: pd.DataFrame, 
+        windows: List[int] = [20, 60]
+    ) -> pd.DataFrame:
         """
         波动率因子
         """
@@ -96,7 +121,7 @@ class TechnicalFactorCalculator:
         
         for w in windows:
             # 历史波动率
-            df[f'volatility_{w}'] = returns.rolling(window=w).std() * np.sqrt(252)
+            df[f'volatility_{w}'] = returns.rolling(window=w).std() * np.sqrt(TRADING_DAYS_PER_YEAR)
             
             # 振幅
             df[f'amplitude_{w}'] = ((df['high'] - df['low']) / df['close']).rolling(window=w).mean()
@@ -109,7 +134,7 @@ class TechnicalFactorCalculator:
         return df
     
     @staticmethod
-    def volume_factors(df):
+    def volume_factors(df: pd.DataFrame) -> pd.DataFrame:
         """
         成交量因子
         """
@@ -131,7 +156,10 @@ class TechnicalFactorCalculator:
         return df
     
     @staticmethod
-    def momentum_factors(df, windows=[5, 10, 20, 60]):
+    def momentum_factors(
+        df: pd.DataFrame, 
+        windows: List[int] = [5, 10, 20, 60]
+    ) -> pd.DataFrame:
         """
         动量因子
         """
@@ -139,8 +167,8 @@ class TechnicalFactorCalculator:
             # 价格动量（N日涨幅）
             df[f'momentum_{w}'] = df['close'] / df['close'].shift(w) - 1
             
-            # 12个月动量（252个交易日）
-            if w == 252:
+            # 12个月动量（年均交易日）
+            if w == TRADING_DAYS_PER_YEAR:
                 df['momentum_12m'] = df[f'momentum_{w}']
         
         # 短期/长期动量比
@@ -157,7 +185,10 @@ class FundamentalFactorCalculator:
     """
     
     @staticmethod
-    def calculate_valuation_factors(price_df, financial_df):
+    def calculate_valuation_factors(
+        price_df: pd.DataFrame, 
+        financial_df: pd.DataFrame
+    ) -> pd.DataFrame:
         """
         估值因子（需要价格和财务数据合并）
         
@@ -187,7 +218,7 @@ class FundamentalFactorCalculator:
         return df
     
     @staticmethod
-    def calculate_quality_factors(financial_df):
+    def calculate_quality_factors(financial_df: pd.DataFrame) -> pd.DataFrame:
         """
         质量因子（盈利能力、财务稳健性）
         """
@@ -221,43 +252,51 @@ class FactorPipeline:
     因子计算流水线：一键计算所有因子
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.tech_calc = TechnicalFactorCalculator()
         self.fund_calc = FundamentalFactorCalculator()
     
-    def calculate_all_factors(self, df, include_fundamental=False):
+    def calculate_all_factors(
+        self, 
+        df: pd.DataFrame, 
+        include_fundamental: bool = False
+    ) -> pd.DataFrame:
         """
         计算全部因子
         """
-        print("🔄 开始计算因子...")
+        logger.info("🔄 开始计算因子...")
         
         # 技术指标因子
-        print("   - 计算均线系统...")
+        logger.info("   - 计算均线系统...")
         df = self.tech_calc.moving_average(df)
         
-        print("   - 计算RSI...")
+        logger.info("   - 计算RSI...")
         df = self.tech_calc.rsi(df)
         
-        print("   - 计算MACD...")
+        logger.info("   - 计算MACD...")
         df = self.tech_calc.macd(df)
         
-        print("   - 计算布林带...")
+        logger.info("   - 计算布林带...")
         df = self.tech_calc.bollinger_bands(df)
         
-        print("   - 计算波动率因子...")
+        logger.info("   - 计算波动率因子...")
         df = self.tech_calc.volatility_factors(df)
         
-        print("   - 计算成交量因子...")
+        logger.info("   - 计算成交量因子...")
         df = self.tech_calc.volume_factors(df)
         
-        print("   - 计算动量因子...")
+        logger.info("   - 计算动量因子...")
         df = self.tech_calc.momentum_factors(df)
         
-        print(f"✅ 因子计算完成，共 {len(df.columns)} 列")
+        logger.info(f"✅ 因子计算完成，共 {len(df.columns)} 列")
         
         return df
     
-    def get_factor_list(self, df, exclude_price_volume=True):
+    def get_factor_list(
+        self, 
+        df: pd.DataFrame, 
+        exclude_price_volume: bool = True
+    ) -> List[str]:
         """
         获取因子名称列表
         """
@@ -273,7 +312,7 @@ class FactorPipeline:
 
 # ============== 测试代码 ==============
 
-def test_factor_calculator():
+def test_factor_calculator() -> pd.DataFrame:
     """测试因子计算"""
     print("=" * 60)
     print("🧪 测试因子计算模块")

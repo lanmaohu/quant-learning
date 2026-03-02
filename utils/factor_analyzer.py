@@ -8,6 +8,13 @@ import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 
+try:
+    from utils.logger import get_logger
+except ImportError:
+    from logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class FactorAnalyzer:
     """
@@ -211,45 +218,45 @@ class FactorAnalyzer:
         """
         生成因子分析报告
         """
-        print("=" * 60)
-        print(f"📊 因子分析报告: {factor_col}")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info(f"📊 因子分析报告: {factor_col}")
+        logger.info("=" * 60)
         
         # 1. IC分析
-        print("\n📈 IC分析:")
+        logger.info("\n📈 IC分析:")
         ic_series = self.calculate_ic_series(df, factor_col, return_col, date_col)
         ic_stats = self.ic_statistics(ic_series['ic'])
         
-        print(f"   IC均值: {ic_stats['ic_mean']:.4f}")
-        print(f"   IC标准差: {ic_stats['ic_std']:.4f}")
-        print(f"   IR比率: {ic_stats['ic_ir']:.4f}")
-        print(f"   IC正占比: {ic_stats['ic_ratio_positive']:.2%}")
-        print(f"   IC显著占比(|IC|>0.02): {ic_stats['ic_ratio_significant']:.2%}")
+        logger.info(f"   IC均值: {ic_stats['ic_mean']:.4f}")
+        logger.info(f"   IC标准差: {ic_stats['ic_std']:.4f}")
+        logger.info(f"   IR比率: {ic_stats['ic_ir']:.4f}")
+        logger.info(f"   IC正占比: {ic_stats['ic_ratio_positive']:.2%}")
+        logger.info(f"   IC显著占比(|IC|>0.02): {ic_stats['ic_ratio_significant']:.2%}")
         
         # 2. 分层回测
-        print("\n📊 分层回测:")
+        logger.info("\n📊 分层回测:")
         quantile_returns, cumulative_returns = self.quantile_backtest(
             df, factor_col, return_col, n_quantiles, date_col
         )
         
         # 每层平均收益
         mean_returns = quantile_returns.mean()
-        print(f"\n   各层平均{return_col}:")
+        logger.info(f"\n   各层平均{return_col}:")
         for q in mean_returns.index:
-            print(f"      {q}: {mean_returns[q]:.4f}")
+            logger.info(f"      {q}: {mean_returns[q]:.4f}")
         
         # 多空组合
         spread = self.calculate_spread(quantile_returns)
         if spread is not None:
-            print(f"\n   多空组合(Q5-Q1):")
-            print(f"      平均收益: {spread.mean():.4f}")
-            print(f"      胜率: {(spread > 0).mean():.2%}")
-            print(f"      夏普比率: {spread.mean() / spread.std() if spread.std() != 0 else np.nan:.4f}")
+            logger.info(f"\n   多空组合(Q5-Q1):")
+            logger.info(f"      平均收益: {spread.mean():.4f}")
+            logger.info(f"      胜率: {(spread > 0).mean():.2%}")
+            logger.info(f"      夏普比率: {spread.mean() / spread.std() if spread.std() != 0 else np.nan:.4f}")
         
         # 3. 单调性检验
-        print("\n🔄 单调性检验:")
+        logger.info("\n🔄 单调性检验:")
         monotonic = all(mean_returns.diff().dropna() > 0) or all(mean_returns.diff().dropna() < 0)
-        print(f"   收益单调递增/递减: {'✅ 是' if monotonic else '❌ 否'}")
+        logger.info(f"   收益单调递增/递减: {'✅ 是' if monotonic else '❌ 否'}")
         
         # 保存结果
         self.results[factor_col] = {

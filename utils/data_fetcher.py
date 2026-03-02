@@ -3,6 +3,7 @@ A股数据获取工具（终极版）
 集成多种数据源，自动故障转移，确保能获取真实数据
 """
 
+from typing import Optional, List, Dict, Union, Tuple, Any
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -13,9 +14,13 @@ import time
 try:
     from utils.data_sources import UnifiedDataFetcher
     from utils.data_solutions import SmartDataFetcher, YahooFinanceSource, BaostockSource
+    from utils.logger import get_logger
 except ImportError:
     from data_sources import UnifiedDataFetcher
     from data_solutions import SmartDataFetcher, YahooFinanceSource, BaostockSource
+    from logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class DataFetcher:
@@ -28,21 +33,21 @@ class DataFetcher:
     4. 模拟数据（最后备选）
     """
     
-    def __init__(self, data_dir='./data', tushare_token=None):
+    def __init__(self, data_dir: str = './data', tushare_token: Optional[str] = None) -> None:
         self.data_dir = data_dir
         os.makedirs(data_dir, exist_ok=True)
         self.tushare_token = tushare_token
         
         # Tushare (数据质量最高，需要token)
-        self._tushare = None
+        self._tushare: Optional[Any] = None
         if tushare_token:
             try:
                 import tushare as ts
                 ts.set_token(tushare_token)
                 self._tushare = ts.pro_api()
-                print("✅ Tushare Pro 已激活")
+                logger.info("✅ Tushare Pro 已激活")
             except Exception as e:
-                print(f"⚠️ Tushare 初始化失败: {e}")
+                logger.warning(f"⚠️ Tushare 初始化失败: {e}")
         
         # 智能数据获取器（优先真实数据）
         self._smart_fetcher = SmartDataFetcher()
@@ -52,14 +57,19 @@ class DataFetcher:
     
     # ==================== 股票数据获取 ====================
     
-    def get_stock_list_ak(self):
+    def get_stock_list_ak(self) -> pd.DataFrame:
         """
         获取A股股票列表
         """
-        print("[DataFetcher] 获取股票列表...")
+        logger.info("[DataFetcher] 获取股票列表...")
         return self._fallback_fetcher.get_stock_list()
     
-    def get_daily_data_ak(self, symbol, start_date, end_date):
+    def get_daily_data_ak(
+        self, 
+        symbol: str, 
+        start_date: str, 
+        end_date: str
+    ) -> pd.DataFrame:
         """
         获取股票日线数据（优先真实数据）
         
@@ -70,26 +80,26 @@ class DataFetcher:
         4. 本地离线CSV
         5. 模拟数据（最后备选）
         """
-        print(f"[DataFetcher] 获取 {symbol} 从 {start_date} 到 {end_date} 的数据...")
+        logger.info(f"[DataFetcher] 获取 {symbol} 从 {start_date} 到 {end_date} 的数据...")
         
         # 1. 优先使用 Tushare (数据质量最高)
         if self._tushare is not None:
             try:
-                print("🔄 尝试使用 Tushare Pro...")
+                logger.info("🔄 尝试使用 Tushare Pro...")
                 df = self._get_tushare_data(symbol, start_date, end_date)
-                print(f"✅ Tushare 成功！")
+                logger.info(f"✅ Tushare 成功！")
                 return df
             except Exception as e:
-                print(f"   ⚠️ Tushare 失败: {e}")
+                logger.warning(f"   ⚠️ Tushare 失败: {e}")
         
         # 2. 尝试其他真实数据源
         try:
             df = self._smart_fetcher.get_daily_data(symbol, start_date, end_date)
-            print(f"✅ 成功获取真实数据！")
+            logger.info(f"✅ 成功获取真实数据！")
             return df
         except Exception as e:
-            print(f"⚠️ 其他数据源失败: {e}")
-            print("   切换到备选方案...")
+            logger.warning(f"⚠️ 其他数据源失败: {e}")
+            logger.info("   切换到备选方案...")
         
         # 3. 使用模拟数据
         try:
@@ -102,12 +112,17 @@ class DataFetcher:
                     'seed': hash(symbol) % 10000
                 }
             )
-            print(f"✅ 使用模拟数据")
+            logger.info(f"✅ 使用模拟数据")
             return df
         except Exception as e:
             raise Exception(f"所有数据源都失败: {e}")
     
-    def _get_tushare_data(self, symbol, start_date, end_date):
+    def _get_tushare_data(
+        self, 
+        symbol: str, 
+        start_date: str, 
+        end_date: str
+    ) -> pd.DataFrame:
         """使用 Tushare 获取数据"""
         # 转换代码格式
         if symbol.startswith('6'):
@@ -146,7 +161,12 @@ class DataFetcher:
         
         return df
     
-    def get_index_data_ak(self, symbol='000300', start_date=None, end_date=None):
+    def get_index_data_ak(
+        self, 
+        symbol: str = '000300', 
+        start_date: Optional[str] = None, 
+        end_date: Optional[str] = None
+    ) -> pd.DataFrame:
         """
         获取指数数据
         """
@@ -155,7 +175,7 @@ class DataFetcher:
         if end_date is None:
             end_date = datetime.now().strftime('%Y%m%d')
         
-        print(f"[DataFetcher] 获取指数 {symbol} 数据...")
+        logger.info(f"[DataFetcher] 获取指数 {symbol} 数据...")
         
         # 尝试从Baostock获取指数数据
         try:
@@ -173,7 +193,7 @@ class DataFetcher:
                 
                 df = bs.get_daily_data(symbol, start_date, end_date)
                 return df
-        except:
+        except Exception:
             pass
         
         # 使用模拟数据
@@ -188,7 +208,12 @@ class DataFetcher:
             seed=hash(symbol) % 10000
         )
     
-    def get_multiple_stocks(self, symbols, start_date=None, end_date=None):
+    def get_multiple_stocks(
+        self, 
+        symbols: List[str], 
+        start_date: Optional[str] = None, 
+        end_date: Optional[str] = None
+    ) -> Dict[str, pd.DataFrame]:
         """
         批量获取多只股票数据
         """
@@ -197,51 +222,51 @@ class DataFetcher:
         if end_date is None:
             end_date = datetime.now().strftime('%Y%m%d')
         
-        print(f"[DataFetcher] 批量获取 {len(symbols)} 只股票数据...")
+        logger.info(f"[DataFetcher] 批量获取 {len(symbols)} 只股票数据...")
         
-        results = {}
+        results: Dict[str, pd.DataFrame] = {}
         for symbol in symbols:
             try:
                 df = self.get_daily_data_ak(symbol, start_date, end_date)
                 results[symbol] = df
                 time.sleep(0.3)  # 避免请求过快
             except Exception as e:
-                print(f"   ⚠️ 获取 {symbol} 失败: {e}")
+                logger.warning(f"   ⚠️ 获取 {symbol} 失败: {e}")
                 continue
         
-        print(f"✅ 成功获取 {len(results)}/{len(symbols)} 只股票")
+        logger.info(f"✅ 成功获取 {len(results)}/{len(symbols)} 只股票")
         return results
     
     # ==================== 数据存储 ====================
     
-    def save_to_csv(self, df, filename):
+    def save_to_csv(self, df: pd.DataFrame, filename: str) -> str:
         """保存数据到CSV"""
         filepath = os.path.join(self.data_dir, filename)
         df.to_csv(filepath)
-        print(f"✅ 数据已保存: {filepath}")
+        logger.info(f"✅ 数据已保存: {filepath}")
         return filepath
     
-    def load_from_csv(self, filename):
+    def load_from_csv(self, filename: str) -> pd.DataFrame:
         """从CSV加载数据"""
         filepath = os.path.join(self.data_dir, filename)
         df = pd.read_csv(filepath, index_col=0, parse_dates=True)
         return df
     
-    def save_to_pickle(self, df, filename):
+    def save_to_pickle(self, df: pd.DataFrame, filename: str) -> str:
         """保存数据到pickle（更快，保留数据类型）"""
         filepath = os.path.join(self.data_dir, filename)
         df.to_pickle(filepath)
-        print(f"✅ 数据已保存: {filepath}")
+        logger.info(f"✅ 数据已保存: {filepath}")
         return filepath
     
-    def load_from_pickle(self, filename):
+    def load_from_pickle(self, filename: str) -> pd.DataFrame:
         """从pickle加载数据"""
         filepath = os.path.join(self.data_dir, filename)
         df = pd.read_pickle(filepath)
         return df
 
 
-def test_data_fetcher():
+def test_data_fetcher() -> pd.DataFrame:
     """测试数据获取器（获取真实数据）"""
     print("=" * 70)
     print("🧪 测试数据获取器（优先真实数据）")

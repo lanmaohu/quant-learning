@@ -8,6 +8,13 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 
+try:
+    from utils.logger import get_logger
+except ImportError:
+    from logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class FactorPreprocessor:
     """
@@ -164,7 +171,7 @@ class FactorPreprocessor:
             result = factor_series.copy()
             result[valid_idx] = residual
             return result
-        except:
+        except Exception:
             return factor_series
     
     @staticmethod
@@ -188,7 +195,7 @@ class FactorPreprocessor:
             result = factor_series.copy()
             result[valid_idx] = residual
             return result
-        except:
+        except Exception:
             return factor_series
     
     @staticmethod
@@ -220,26 +227,26 @@ class FactorPreprocessor:
         
         默认流程：去极值 -> 中性化（可选）-> 标准化
         """
-        print(f"🔄 开始预处理 {len(factor_cols)} 个因子...")
+        logger.info(f"🔄 开始预处理 {len(factor_cols)} 个因子...")
         df = df.copy()
         
         # 1. 去极值
-        print(f"   1️⃣ 去极值 ({winsorize_method})...")
+        logger.info(f"   1️⃣ 去极值 ({winsorize_method})...")
         df = FactorPreprocessor.winsorize_df(df, factor_cols, method=winsorize_method)
         
         # 2. 中性化（可选）
         if neutralize_cap and market_cap_col:
-            print("   2️⃣ 市值中性化...")
+            logger.info("   2️⃣ 市值中性化...")
             for col in factor_cols:
                 df[col] = FactorPreprocessor.neutralize_market_cap(
                     df[col], df[market_cap_col]
                 )
         
         # 3. 标准化
-        print(f"   3️⃣ 标准化 ({standardize_method})...")
+        logger.info(f"   3️⃣ 标准化 ({standardize_method})...")
         df = FactorPreprocessor.standardize_df(df, factor_cols, method=standardize_method)
         
-        print("✅ 预处理完成！")
+        logger.info("✅ 预处理完成！")
         return df
 
 
