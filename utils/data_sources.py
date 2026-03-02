@@ -11,6 +11,15 @@ import os
 import pickle
 import json
 
+try:
+    from utils.logger import get_logger
+except ImportError:
+    from logger import get_logger
+
+logger = get_logger(__name__)
+
+from .constants import TRADING_DAYS_PER_YEAR
+
 
 class DataSourceBase:
     """数据源基类"""
@@ -27,7 +36,7 @@ class DataSourceBase:
     def _save_cache(self, df, cache_path):
         """保存数据到缓存"""
         df.to_pickle(cache_path)
-        print(f"   💾 数据已缓存: {cache_path}")
+        logger.info(f"   💾 数据已缓存: {cache_path}")
     
     def _load_cache(self, cache_path, max_age_days=7):
         """从缓存加载数据"""
@@ -37,14 +46,14 @@ class DataSourceBase:
         # 检查缓存是否过期
         file_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(cache_path))
         if file_age.days > max_age_days:
-            print(f"   ⏰ 缓存已过期 ({file_age.days} 天)")
+            logger.info(f"   ⏰ 缓存已过期 ({file_age.days} 天)")
             return None
         
         try:
             df = pd.read_pickle(cache_path)
-            print(f"   ✅ 从缓存加载数据: {len(df)} 条记录")
+            logger.info(f"   ✅ 从缓存加载数据: {len(df)} 条记录")
             return df
-        except:
+        except Exception:
             return None
     
     def get_daily_data(self, symbol, start_date, end_date):
@@ -63,7 +72,7 @@ class AKShareSource(DataSourceBase):
             self.ak = ak
             self.available = True
         except ImportError:
-            print("⚠️ AKShare 未安装")
+            logger.warning("⚠️ AKShare 未安装")
             self.available = False
     
     def get_daily_data(self, symbol, start_date, end_date):
@@ -79,7 +88,7 @@ class AKShareSource(DataSourceBase):
             return cached
         
         # 从网络获取
-        print(f"[{self.name}] 获取 {symbol} 从 {start_date} 到 {end_date} 的数据...")
+        logger.info(f"[{self.name}] 获取 {symbol} 从 {start_date} 到 {end_date} 的数据...")
         
         max_retries = 3
         for attempt in range(max_retries):
@@ -100,7 +109,7 @@ class AKShareSource(DataSourceBase):
                 return df
                 
             except Exception as e:
-                print(f"   ⚠️ 第 {attempt + 1} 次尝试失败: {e}")
+                logger.warning(f"   ⚠️ 第 {attempt + 1} 次尝试失败: {e}")
                 if attempt < max_retries - 1:
                     import time
                     time.sleep(2)
@@ -143,10 +152,10 @@ class TushareSource(DataSourceBase):
                 self.pro = self.ts.pro_api()
                 self.available = True
             else:
-                print("⚠️ Tushare Token 未设置")
+                logger.warning("⚠️ Tushare Token 未设置")
                 self.available = False
         except ImportError:
-            print("⚠️ Tushare 未安装")
+            logger.warning("⚠️ Tushare 未安装")
             self.available = False
     
     def get_daily_data(self, symbol, start_date, end_date):
@@ -159,7 +168,7 @@ class TushareSource(DataSourceBase):
         if cached is not None:
             return cached
         
-        print(f"[{self.name}] 获取 {symbol} 数据...")
+        logger.info(f"[{self.name}] 获取 {symbol} 数据...")
         
         # Tushare 格式: 000001.SZ
         if symbol.startswith('6'):
@@ -224,7 +233,7 @@ class MockDataSource(DataSourceBase):
         seed : int
             随机种子，保证可重复
         """
-        print(f"[{self.name}] 生成 {symbol} 的模拟数据...")
+        logger.info(f"[{self.name}] 生成 {symbol} 的模拟数据...")
         
         # 日期范围
         start = datetime.strptime(start_date, '%Y%m%d')
@@ -236,8 +245,8 @@ class MockDataSource(DataSourceBase):
             np.random.seed(seed)
         
         # 计算日收益率参数
-        daily_return = annual_return / 252
-        daily_vol = annual_volatility / np.sqrt(252)
+        daily_return = annual_return / TRADING_DAYS_PER_YEAR
+        daily_vol = annual_volatility / np.sqrt(TRADING_DAYS_PER_YEAR)
         
         # 生成对数收益率（几何布朗运动）
         log_returns = np.random.normal(daily_return, daily_vol, n)
@@ -283,8 +292,8 @@ class MockDataSource(DataSourceBase):
         total_shares = 1000000000
         df['turnover'] = df['volume'] / total_shares * 100
         
-        print(f"   ✅ 生成完成: {n} 条记录，起始价 {base_price:.2f}，结束价 {prices[-1]:.2f}")
-        print(f"      区间收益: {(prices[-1]/prices[0]-1)*100:.2f}%")
+        logger.info(f"   ✅ 生成完成: {n} 条记录，起始价 {base_price:.2f}，结束价 {prices[-1]:.2f}")
+        logger.info(f"      区间收益: {(prices[-1]/prices[0]-1)*100:.2f}%")
         
         return df
 
@@ -363,7 +372,7 @@ class UnifiedDataFetcher:
                 continue
             
             try:
-                print(f"🔄 尝试使用 {name} 获取数据...")
+                logger.info(f"🔄 尝试使用 {name} 获取数据...")
                 
                 if name == 'mock' and use_mock_params:
                     df = source.get_daily_data(symbol, start_date, end_date, 
@@ -371,13 +380,13 @@ class UnifiedDataFetcher:
                 else:
                     df = source.get_daily_data(symbol, start_date, end_date)
                 
-                print(f"✅ {name} 获取成功！")
+                logger.info(f"✅ {name} 获取成功！")
                 return df
                 
             except Exception as e:
                 error_msg = f"{name}: {str(e)[:50]}"
                 errors.append(error_msg)
-                print(f"   ❌ {error_msg}")
+                logger.error(f"   ❌ {error_msg}")
                 continue
         
         # 所有源都失败

@@ -7,6 +7,7 @@ import backtrader as bt
 import pandas as pd
 from datetime import datetime
 from utils.data_fetcher import DataFetcher
+from utils.constants import DEFAULT_COMMISSION_RATE, DEFAULT_SLIPPAGE
 
 
 class DualMAStrategy(bt.Strategy):
@@ -116,11 +117,11 @@ def run_backtest(symbol='000001', start_date='20220101', end_date='20241231'):
     # 设置初始资金
     cerebro.broker.setcash(100000.0)
     
-    # 设置佣金（千分之一）
-    cerebro.broker.setcommission(commission=0.001)
+    # 设置佣金
+    cerebro.broker.setcommission(commission=DEFAULT_COMMISSION_RATE)
     
     # 设置滑点
-    cerebro.broker.set_slippage_perc(0.001)
+    cerebro.broker.set_slippage_perc(DEFAULT_SLIPPAGE)
     
     # 添加分析器
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')

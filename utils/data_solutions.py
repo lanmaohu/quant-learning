@@ -9,6 +9,13 @@ from datetime import datetime, timedelta
 import os
 import time
 
+try:
+    from utils.logger import get_logger
+except ImportError:
+    from logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class DataSolutionManager:
     """
@@ -28,12 +35,12 @@ class DataSolutionManager:
     @staticmethod
     def print_solutions():
         """打印所有解决方案"""
-        print("=" * 70)
-        print("📚 数据抓取问题解决方案（按推荐优先级排序）")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("📚 数据抓取问题解决方案（按推荐优先级排序）")
+        logger.info("=" * 70)
         for solution in DataSolutionManager.SOLUTIONS:
-            print(f"   {solution}")
-        print("=" * 70)
+            logger.info(f"   {solution}")
+        logger.info("=" * 70)
 
 
 # ========== 方案 1: Yahoo Finance ==========
@@ -52,7 +59,7 @@ class YahooFinanceSource:
             self.yf = yf
             self.available = True
         except ImportError:
-            print("⚠️ yfinance 未安装，运行: pip install yfinance")
+            logger.warning("⚠️ yfinance 未安装，运行: pip install yfinance")
             self.available = False
     
     @staticmethod
@@ -73,7 +80,7 @@ class YahooFinanceSource:
         if not self.available:
             raise Exception("yfinance 未安装")
         
-        print(f"[{self.name}] 尝试获取 {symbol}...")
+        logger.info(f"[{self.name}] 尝试获取 {symbol}...")
         
         # 转换代码格式
         yahoo_symbol = self.ascode_to_yahoo(symbol)
@@ -108,7 +115,7 @@ class YahooFinanceSource:
         df['change'] = df['close'].diff()
         df['amplitude'] = (df['high'] - df['low']) / df['close'].shift(1) * 100
         
-        print(f"   ✅ 成功获取 {len(df)} 条数据")
+        logger.info(f"   ✅ 成功获取 {len(df)} 条数据")
         return df
 
 
@@ -130,24 +137,24 @@ class BaostockSource:
             self.available = True
             self._login()
         except ImportError:
-            print("⚠️ baostock 未安装，运行: pip install baostock")
+            logger.warning("⚠️ baostock 未安装，运行: pip install baostock")
             self.available = False
     
     def _login(self):
         """登录 Baostock"""
         result = self.bs.login()
         if result.error_code != '0':
-            print(f"   ⚠️ Baostock 登录失败: {result.error_msg}")
+            logger.warning(f"   ⚠️ Baostock 登录失败: {result.error_msg}")
             self.available = False
         else:
-            print(f"   ✅ Baostock 登录成功")
+            logger.info(f"   ✅ Baostock 登录成功")
     
     def get_daily_data(self, symbol, start_date, end_date):
         """获取日线数据"""
         if not self.available:
             raise Exception("Baostock 不可用")
         
-        print(f"[{self.name}] 获取 {symbol}...")
+        logger.info(f"[{self.name}] 获取 {symbol}...")
         
         # 转换代码格式
         if symbol.startswith('6'):
@@ -196,7 +203,7 @@ class BaostockSource:
         df['change'] = df['close'] - df['pre_close']
         df['amplitude'] = (df['high'] - df['low']) / df['pre_close'] * 100
         
-        print(f"   ✅ 成功获取 {len(df)} 条数据")
+        logger.info(f"   ✅ 成功获取 {len(df)} 条数据")
         return df
 
 
@@ -221,7 +228,7 @@ class OfflineCSVSource:
         if not os.path.exists(filepath):
             raise Exception(f"本地文件不存在: {filepath}")
         
-        print(f"[{self.name}] 加载 {symbol}...")
+        logger.info(f"[{self.name}] 加载 {symbol}...")
         
         df = pd.read_csv(filepath, index_col=0, parse_dates=True)
         
@@ -230,7 +237,7 @@ class OfflineCSVSource:
         end = pd.Timestamp(end_date)
         df = df[(df.index >= start) & (df.index <= end)]
         
-        print(f"   ✅ 成功加载 {len(df)} 条数据")
+        logger.info(f"   ✅ 成功加载 {len(df)} 条数据")
         return df
     
     def create_sample_csv(self, symbol='000001'):
@@ -250,8 +257,8 @@ class OfflineCSVSource:
         filepath = os.path.join(self.data_dir, f"{symbol}_sample.csv")
         df.to_csv(filepath)
         
-        print(f"✅ 示例CSV已创建: {filepath}")
-        print("   您可以复制此文件，修改文件名和数据，然后导入自己的数据")
+        logger.info(f"✅ 示例CSV已创建: {filepath}")
+        logger.info("   您可以复制此文件，修改文件名和数据，然后导入自己的数据")
         
         return filepath
 
@@ -309,27 +316,27 @@ class SmartDataFetcher:
         errors = []
         for name, source in sources_to_try:
             try:
-                print(f"🔄 尝试使用 {name}...")
+                logger.info(f"🔄 尝试使用 {name}...")
                 df = source.get_daily_data(symbol, start_date, end_date)
-                print(f"✅ {name} 成功！")
+                logger.info(f"✅ {name} 成功！")
                 return df
             except Exception as e:
                 error_msg = f"{name}: {str(e)[:50]}"
                 errors.append(error_msg)
-                print(f"   ❌ {error_msg}")
+                logger.error(f"   ❌ {error_msg}")
                 continue
         
         # 所有方案都失败
-        print("\n" + "=" * 70)
-        print("❌ 所有数据源都失败")
-        print("=" * 70)
-        print("\n建议解决方案:")
-        print("1. 安装 yfinance: pip install yfinance")
-        print("2. 安装 baostock: pip install baostock")
-        print("3. 手动下载CSV数据放到 ./data/offline/ 目录")
-        print("   文件命名格式: {股票代码}.csv，如 000001.csv")
-        print("   必需列: date, open, high, low, close, volume")
-        print("=" * 70)
+        logger.error("\n" + "=" * 70)
+        logger.error("❌ 所有数据源都失败")
+        logger.error("=" * 70)
+        logger.error("\n建议解决方案:")
+        logger.error("1. 安装 yfinance: pip install yfinance")
+        logger.error("2. 安装 baostock: pip install baostock")
+        logger.error("3. 手动下载CSV数据放到 ./data/offline/ 目录")
+        logger.error("   文件命名格式: {股票代码}.csv，如 000001.csv")
+        logger.error("   必需列: date, open, high, low, close, volume")
+        logger.error("=" * 70)
         
         raise Exception(f"所有数据源都失败: {'; '.join(errors)}")
 
@@ -341,12 +348,12 @@ def install_data_packages():
     
     packages = ['yfinance', 'baostock', 'requests']
     
-    print("📦 安装数据获取依赖包...")
+    logger.info("📦 安装数据获取依赖包...")
     for pkg in packages:
-        print(f"   安装 {pkg}...")
+        logger.info(f"   安装 {pkg}...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pkg])
     
-    print("✅ 安装完成！")
+    logger.info("✅ 安装完成！")
 
 
 # ============== 测试 ==============

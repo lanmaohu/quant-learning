@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from utils.data_fetcher import DataFetcher
+from utils.constants import DEFAULT_COMMISSION_RATE, DEFAULT_SLIPPAGE
 
 
 def run_vectorbt_backtest(symbol='000001', start_date='20220101', end_date='20241231'):
@@ -47,8 +48,8 @@ def run_vectorbt_backtest(symbol='000001', start_date='20220101', end_date='2024
         entries=entries,
         exits=exits,
         init_cash=100000,
-        fees=0.001,      # 手续费 0.1%
-        slippage=0.001,  # 滑点 0.1%
+        fees=DEFAULT_COMMISSION_RATE,  # 手续费
+        slippage=DEFAULT_SLIPPAGE,      # 滑点
         freq='1d'        # 日线数据
     )
     
@@ -107,7 +108,7 @@ def parameter_optimization(symbol='000001'):
         entries=entries,
         exits=exits,
         init_cash=100000,
-        fees=0.001,
+        fees=DEFAULT_COMMISSION_RATE,
         freq='1d'
     )
     
