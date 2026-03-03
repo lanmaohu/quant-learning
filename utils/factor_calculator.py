@@ -176,6 +176,46 @@ class TechnicalFactorCalculator:
             df['momentum_st_lt'] = df['momentum_20'] / (df['momentum_60'] + 1e-8)
         
         return df
+    
+    @staticmethod
+    def kdj(df: pd.DataFrame, n: int = 9, m1: int = 3, m2: int = 3) -> pd.DataFrame:
+        """
+        KDJ 随机指标
+        
+        Parameters:
+        -----------
+        n : int
+            RSV计算周期，默认9
+        m1 : int
+            K值平滑周期，默认3
+        m2 : int
+            D值平滑周期，默认3
+        """
+        # 计算RSV
+        low_list = df['low'].rolling(window=n, min_periods=n).min()
+        high_list = df['high'].rolling(window=n, min_periods=n).max()
+        rsv = (df['close'] - low_list) / (high_list - low_list) * 100
+        
+        # 计算K值（RSV的m1日移动平均）
+        df['kdj_k'] = rsv.ewm(alpha=1/m1, adjust=False).mean()
+        
+        # 计算D值（K的m2日移动平均）
+        df['kdj_d'] = df['kdj_k'].ewm(alpha=1/m2, adjust=False).mean()
+        
+        # 计算J值
+        df['kdj_j'] = 3 * df['kdj_k'] - 2 * df['kdj_d']
+        
+        # 金叉死叉信号
+        df['kdj_golden_cross'] = ((df['kdj_k'] > df['kdj_d']) & 
+                                   (df['kdj_k'].shift(1) <= df['kdj_d'].shift(1))).astype(int)
+        df['kdj_dead_cross'] = ((df['kdj_k'] < df['kdj_d']) & 
+                                 (df['kdj_k'].shift(1) >= df['kdj_d'].shift(1))).astype(int)
+        
+        # J值超卖/超买信号
+        df['kdj_j_oversold'] = (df['kdj_j'] < -5).astype(int)  # J<-5 超卖
+        df['kdj_j_overbought'] = (df['kdj_j'] > 105).astype(int)  # J>105 超买
+        
+        return df
 
 
 class FundamentalFactorCalculator:

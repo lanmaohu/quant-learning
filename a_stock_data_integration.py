@@ -112,14 +112,22 @@ class AStockDataAdapter:
         df = processor.calculate_returns(df, periods=[1, 5, 10, 20])
         print(f"2️⃣ 数据预处理完成")
         
-        # 3. 计算因子
+        # 3. 计算因子（包含KDJ）
         factor_pipeline = FactorPipeline()
         df = factor_pipeline.calculate_all_factors(df)
+        
+        # 额外计算KDJ
+        from utils.factor_calculator import TechnicalFactorCalculator
+        tech_calc = TechnicalFactorCalculator()
+        df = tech_calc.kdj(df)
+        print(f"3️⃣ 因子计算完成，包含KDJ指标 (K/D/J)")
+        
         factor_cols = factor_pipeline.get_factor_list(df)
+        factor_cols.extend(['kdj_k', 'kdj_d', 'kdj_j'])  # 添加KDJ列
         
         # 过滤出数值型因子列
         factor_cols = [c for c in factor_cols if pd.api.types.is_numeric_dtype(df[c])]
-        print(f"3️⃣ 因子计算完成: {len(factor_cols)} 个因子")
+        print(f"   共 {len(factor_cols)} 个因子")
         
         # 4. 因子预处理
         preprocessor = FactorPreprocessor()
