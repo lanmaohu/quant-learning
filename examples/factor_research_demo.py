@@ -3,6 +3,10 @@
 Day 6-12 综合实战：从原始数据到多因子策略
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt

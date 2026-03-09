@@ -7,8 +7,8 @@
 import sys
 import os
 
-# 获取项目根目录
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+# 获取项目根目录（脚本在 scripts/ 子目录中，项目根目录是上一级）
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # 添加项目路径到 sys.path
 if PROJECT_ROOT not in sys.path:

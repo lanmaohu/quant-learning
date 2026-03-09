@@ -2,6 +2,7 @@
 """
 A股历史数据与量化框架集成
 将外部CSV数据集成到我们的因子研究流程中
+用法: python scripts/a_stock_data_integration.py /path/to/a_stock_data.csv
 """
 
 import pandas as pd
@@ -10,7 +11,9 @@ import sys
 import os
 
 # 添加项目路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
 
 from utils.data_processor import DataProcessor
 from utils.factor_calculator import FactorPipeline
@@ -24,7 +27,9 @@ class AStockDataAdapter:
     将外部CSV数据转换为我们的量化框架格式
     """
     
-    def __init__(self, data_path='/Users/harry/Documents/a_stock_history_price_20260223.csv'):
+    def __init__(self, data_path=None):
+        if data_path is None:
+            data_path = sys.argv[1] if len(sys.argv) > 1 else input("请输入CSV文件路径: ").strip()
         self.data_path = data_path
         self.raw_df = None
         self.processed_df = None
@@ -171,7 +176,7 @@ def demo_single_stock_analysis():
     print(df[factor_cols].describe().round(4))
     
     # 保存结果
-    output_file = './data/000001_factor_analysis.csv'
+    output_file = os.path.join(DATA_DIR, '000001_factor_analysis.csv')
     df.to_csv(output_file)
     print(f"\n💾 结果已保存: {output_file}")
     

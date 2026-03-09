@@ -5,6 +5,9 @@
 
 import os
 import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
 
 
 def print_manual_download_guide():
@@ -71,7 +74,7 @@ def print_manual_download_guide():
 
 def setup_offline_directory():
     """设置离线数据目录"""
-    offline_dir = './data/offline'
+    offline_dir = os.path.join(DATA_DIR, 'offline')
     os.makedirs(offline_dir, exist_ok=True)
     
     # 创建示例CSV
@@ -130,7 +133,7 @@ def download_with_yahoo():
                 df = yf.get_daily_data(symbol, '20230101', '20241231')
                 
                 # 保存
-                filepath = f'./data/offline/{symbol}_yahoo.csv'
+                filepath = os.path.join(DATA_DIR, 'offline', f'{symbol}_yahoo.csv')
                 df.to_csv(filepath)
                 print(f"   ✅ 已保存: {filepath} ({len(df)} 条)")
                 
@@ -166,7 +169,7 @@ def download_with_baostock():
                 df = bs.get_daily_data(symbol, '20230101', '20241231')
                 
                 # 保存
-                filepath = f'./data/offline/{symbol}_baostock.csv'
+                filepath = os.path.join(DATA_DIR, 'offline', f'{symbol}_baostock.csv')
                 df.to_csv(filepath)
                 print(f"   ✅ 已保存: {filepath} ({len(df)} 条)")
                 

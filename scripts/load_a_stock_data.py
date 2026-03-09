@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 """
 A股历史数据加载和分析工具
-使用 /Users/harry/Documents/a_stock_history_price_20260223.csv
+用法: python scripts/load_a_stock_data.py /path/to/a_stock_data.csv
 """
 
+import sys
+import os
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -13,8 +15,10 @@ class AStockDataLoader:
     """
     A股历史数据加载器
     """
-    
-    def __init__(self, data_path='/Users/harry/Documents/a_stock_history_price_20260223.csv'):
+
+    def __init__(self, data_path=None):
+        if data_path is None:
+            data_path = sys.argv[1] if len(sys.argv) > 1 else input("请输入CSV文件路径: ").strip()
         self.data_path = data_path
         self.df = None
         

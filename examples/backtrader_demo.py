@@ -3,6 +3,10 @@ Backtrader 入门示例
 双均线策略：当短期均线上穿长期均线时买入，下穿时卖出
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import backtrader as bt
 import pandas as pd
 from datetime import datetime

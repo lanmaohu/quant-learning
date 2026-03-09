@@ -7,8 +7,8 @@ Jupyter Notebook 启动配置
 import sys
 import os
 
-# 1. 添加项目路径
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+# 1. 添加项目路径（脚本在 scripts/ 子目录中，项目根目录是上一级）
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 

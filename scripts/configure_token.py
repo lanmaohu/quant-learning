@@ -30,8 +30,8 @@ def main():
         print("❌ Token 无效或太短")
         sys.exit(1)
     
-    # 保存到 .env 文件
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    # 保存到 .env 文件（项目根目录）
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
     
     with open(env_path, 'w') as f:
         f.write(f"# Tushare Pro Token\n")

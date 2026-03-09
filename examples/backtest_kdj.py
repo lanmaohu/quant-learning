@@ -16,7 +16,9 @@ import sys
 import os
 
 # 添加项目路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
 
 from utils.data_fetcher import DataFetcher
 from utils.data_processor import DataProcessor
@@ -177,8 +179,8 @@ def run_vectorbt_backtest(symbol='000001', start_date='20220101', end_date='2024
     # 4. 绘制图表
     try:
         fig = portfolio.plot()
-        fig.write_html(f"./data/kdj_backtest_{symbol}.html")
-        print(f"\n✅ 图表已保存: ./data/kdj_backtest_{symbol}.html")
+        fig.write_html(os.path.join(DATA_DIR, f'kdj_backtest_{symbol}.html'))
+        print(f"\n✅ 图表已保存: {os.path.join(DATA_DIR, f'kdj_backtest_{symbol}.html')}")
     except:
         pass
     

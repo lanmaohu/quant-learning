@@ -8,10 +8,15 @@ Tushare Pro 是专业的金融数据接口，数据质量高
 3. 将 token 填入下方代码或使用环境变量
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
+
 import pandas as pd
 import tushare as ts
 from datetime import datetime, timedelta
-import os
 
 
 class TushareDataFetcher:
@@ -283,8 +288,8 @@ def demo_tushare():
         
         # 5. 保存数据
         print("\n💾 保存数据...")
-        df.to_csv('./data/000001_tushare.csv')
-        print("✅ 数据已保存到 ./data/000001_tushare.csv")
+        df.to_csv(os.path.join(DATA_DIR, '000001_tushare.csv'))
+        print(f"✅ 数据已保存到 {os.path.join(DATA_DIR, '000001_tushare.csv')}")
         
     except Exception as e:
         print(f"❌ 错误: {e}")

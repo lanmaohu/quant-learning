@@ -3,6 +3,12 @@ VectorBT 入门示例
 向量化回测，速度极快，适合参数优化和ML策略
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
+
 import vectorbt as vbt
 import pandas as pd
 import numpy as np
@@ -67,8 +73,8 @@ def run_vectorbt_backtest(symbol='000001', start_date='20220101', end_date='2024
     
     # 6. 绘制图表
     fig = portfolio.plot()
-    fig.write_html(f"./data/vectorbt_backtest_{symbol}.html")
-    print(f"\n✅ 图表已保存: ./data/vectorbt_backtest_{symbol}.html")
+    fig.write_html(os.path.join(DATA_DIR, f'vectorbt_backtest_{symbol}.html'))
+    print(f"\n✅ 图表已保存: {os.path.join(DATA_DIR, f'vectorbt_backtest_{symbol}.html')}")
     
     return portfolio
 
@@ -132,8 +138,8 @@ def parameter_optimization(symbol='000001'):
         title='年化收益率热力图 (参数优化)',
         colorscale='RdYlGn'
     )
-    fig.write_html("./data/parameter_optimization_heatmap.html")
-    print(f"✅ 热力图已保存: ./data/parameter_optimization_heatmap.html")
+    fig.write_html(os.path.join(DATA_DIR, 'parameter_optimization_heatmap.html'))
+    print(f"✅ 热力图已保存: {os.path.join(DATA_DIR, 'parameter_optimization_heatmap.html')}")
     
     return portfolio
 

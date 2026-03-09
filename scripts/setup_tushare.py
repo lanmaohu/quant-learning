@@ -3,7 +3,10 @@
 交互式配置 Tushare Token
 """
 
+import sys
 import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import getpass
 
 
@@ -37,7 +40,7 @@ Tushare Pro 是专业的金融数据接口，需要 token 才能使用。
             return False
     
     # 保存到 .env 文件
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
     
     with open(env_path, 'w') as f:
         f.write(f"# Tushare Pro Token\n")
@@ -125,7 +128,7 @@ def main():
         elif choice == '2':
             test_data_fetching()
         elif choice == '3':
-            env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+            env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
             if os.path.exists(env_path):
                 with open(env_path, 'r') as f:
                     content = f.read()
