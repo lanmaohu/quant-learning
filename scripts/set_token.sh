@@ -17,7 +17,7 @@ if [ -z "$TOKEN" ]; then
 fi
 
 # 保存到 .env 文件
-ENV_FILE="$(dirname "$0")/.env"
+ENV_FILE="$(dirname "$(dirname "$0")")/.env"
 
 echo "# Tushare Pro Token" > "$ENV_FILE"
 echo "# 获取方式: https://tushare.pro/user/token" >> "$ENV_FILE"

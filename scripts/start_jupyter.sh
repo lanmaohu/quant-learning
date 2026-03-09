@@ -1,7 +1,7 @@
 #!/bin/bash
 # 一键启动 Jupyter Lab
 
-cd "$(dirname "$0")"
+cd "$(dirname "$(dirname "$0")")"
 
 # 激活 conda 环境
 source ~/miniconda3/etc/profile.d/conda.sh

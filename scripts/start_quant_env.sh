@@ -13,7 +13,7 @@ pip list | grep -E "(pandas|numpy|backtrader|vectorbt|akshare|lightgbm|jupyter)"
 
 echo ""
 echo "💡 提示:"
-echo "   - 运行回测: python backtrader_demo.py"
+echo "   - 运行回测: python examples/backtrader_demo.py"
 echo "   - 启动Jupyter: jupyter lab"
 echo ""
 
