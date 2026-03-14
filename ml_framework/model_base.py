@@ -80,6 +80,11 @@ class SklearnModel(BaseModel):
         self.model = sklearn_model
     
     def fit(self, X_train, y_train, X_val=None, y_val=None):
+        # 确保输入是 numpy 数组，避免特征名警告
+        if hasattr(X_train, 'values'):
+            X_train = X_train.values
+        if hasattr(y_train, 'values'):
+            y_train = y_train.values
         self.model.fit(X_train, y_train)
         self.is_fitted = True
         return {'message': 'Training completed'}
@@ -87,6 +92,9 @@ class SklearnModel(BaseModel):
     def predict(self, X):
         if not self.is_fitted:
             raise ValueError("模型未训练")
+        # 确保输入是 numpy 数组
+        if hasattr(X, 'values'):
+            X = X.values
         return self.model.predict(X)
     
     def save(self, path: str):
