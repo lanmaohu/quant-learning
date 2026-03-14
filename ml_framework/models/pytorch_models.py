@@ -82,6 +82,10 @@ class MLPModel(BaseModel):
             self.model.train()
             train_losses = []
             for batch_X, batch_y in train_loader:
+                # 跳过 batch size 为 1 的情况（BatchNorm 需要至少 2 个样本）
+                if batch_X.size(0) <= 1:
+                    continue
+                
                 batch_X, batch_y = batch_X.to(self.device), batch_y.to(self.device)
                 
                 optimizer.zero_grad()
