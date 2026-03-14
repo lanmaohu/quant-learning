@@ -11,16 +11,20 @@ load_dotenv()
 
 # Tushare Pro Token
 # 优先级: 1. 环境变量 2. .env 文件 3. 手动设置
-TUSHARE_TOKEN = os.getenv('TUSHARE_TOKEN', '')
+TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN", "")
+
+# GLM 模型配置
+GLM_API_KEY = os.getenv("GLM_API_KEY", "")
+GLM_MODEL = os.getenv("GLM_MODEL", "glm-4")
 
 # 其他配置
-DATA_DIR = './data'
-CACHE_DIR = './data/cache'
+DATA_DIR = "./data"
+CACHE_DIR = "./data/cache"
 
 
 def check_tushare_token():
     """检查 Tushare Token 是否配置"""
-    if not TUSHARE_TOKEN or TUSHARE_TOKEN == '你的token请替换这里':
+    if not TUSHARE_TOKEN or TUSHARE_TOKEN == "你的token请替换这里":
         print("""
         ⚠️ Tushare Token 未配置！
         
@@ -39,15 +43,15 @@ def check_tushare_token():
             fetcher = DataFetcher(tushare_token='你的token')
         """)
         return False
-    
+
     # 验证 token 前几位格式
     if len(TUSHARE_TOKEN) < 20:
         print("⚠️ Token 格式似乎不正确，请检查")
         return False
-    
+
     print(f"✅ Tushare Token 已配置 (前10位: {TUSHARE_TOKEN[:10]}...)")
     return True
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     check_tushare_token()
