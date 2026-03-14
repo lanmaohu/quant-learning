@@ -82,6 +82,10 @@ class LightGBMModel(SklearnModel):
     def __init__(self, **kwargs):
         try:
             import lightgbm as lgb
+            import warnings
+            # 抑制特征名警告
+            warnings.filterwarnings('ignore', message='X does not have valid feature names')
+            
             model = lgb.LGBMRegressor(
                 n_estimators=kwargs.get('n_estimators', 100),
                 max_depth=kwargs.get('max_depth', 6),
