@@ -101,7 +101,7 @@ class ThresholdStrategy(bt.Strategy):
             # 卖出条件1: 预测收益 < 卖出阈值
             sell_signal = pred < self.config.sell_threshold
             
-            # 卖出条件2: 止损（如果启用）
+            # 卖出条件2: 止损（如果启用)
             if self.config.use_stop_loss and code in positions:
                 current_price = None
                 for data in self.datas:
@@ -177,7 +177,7 @@ def run_threshold_backtest(
     print_log: bool = True
 ) -> Dict:
     """
-    运行 Threshold 策略回测（简化接口）
+    运行 Threshold 策略回测（简化接口)
     """
     print("=" * 70)
     print("🚀 Threshold 策略回测")
