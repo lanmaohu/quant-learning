@@ -7,7 +7,7 @@ from pathlib import Path
 
 # 路径配置
 PROJECT_ROOT = Path(__file__).parent.parent
-DATA_PATH = os.getenv('STOCK_DATA_PATH', str(PROJECT_ROOT / 'data' / 'a_stock_history_price_20260223.csv'))
+DATA_PATH = os.getenv('STOCK_DATA_PATH', str(PROJECT_ROOT / 'data' / 'a_stock_history_price.csv'))
 
 # 数据参数
 HISTORY_YEARS = 5
