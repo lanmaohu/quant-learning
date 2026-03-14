@@ -108,6 +108,10 @@ class StockDataLoader:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
+        # 如果没有amount列，通过 volume * close 计算
+        if 'amount' not in df.columns and 'volume' in df.columns and 'close' in df.columns:
+            df['amount'] = df['volume'] * df['close']
+        
         return df
     
     def select_sample_codes(self, n: int = 50, random_seed: int = 42) -> List[str]:
