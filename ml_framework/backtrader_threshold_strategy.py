@@ -1,40 +1,38 @@
 """
-Threshold 阈值策略 - 预置版本
-
-策略逻辑：
-1. 预测收益率 > buy_threshold → 买入
-2. 预测收益率 < sell_threshold → 卖出
-3. 最多持有 max_positions 只股票
-4. 每只股票的仓位不超过 max_position_size
+Threshold 阈值策略 - Backtrader 实现
+买入条件: 预测收益 > buy_threshold
+卖出条件: 预测收益 < sell_threshold 或达到止损
 """
 
 import backtrader as bt
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional
+from typing import Dict, List, Tuple
 from dataclasses import dataclass
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 @dataclass
 class ThresholdConfig:
-    """Threshold 策略配置"""
-    buy_threshold: float = 0.02      # 买入阈值 (2%)
-    sell_threshold: float = -0.01    # 卖出阈值 (-1%)
+    """阈值策略配置"""
+    buy_threshold: float = 0.02      # 买入阈值
+    sell_threshold: float = -0.01    # 卖出阈值
     max_positions: int = 10          # 最大持仓数
-    max_position_size: float = 0.2   # 单只股票最大仓位 (20%)
-    rebalance_freq: int = 1          # 调仓频率 (1=每日, 5=每周)
+    max_position_size: float = 0.2   # 单只股票最大仓位
+    rebalance_freq: int = 1          # 调仓频率
     use_stop_loss: bool = False      # 是否使用止损
-    stop_loss_pct: float = 0.05      # 止损比例 (5%)
+    stop_loss_pct: float = 0.05      # 止损比例
 
 
 class ThresholdStrategy(bt.Strategy):
-    """
-    Threshold 阈值交易策略
-    """
+    """阈值交易策略"""
     
     params = (
-        ('config', None),           # ThresholdConfig 对象
-        ('signals', None),          # 信号字典 {date: [(code, pred), ...]}
+        ('config', None),
+        ('signals', None),
         ('print_log', True),
     )
     
@@ -48,7 +46,6 @@ class ThresholdStrategy(bt.Strategy):
         if self.params.print_log:
             dt = dt or self.datas[0].datetime.date(0)
             print(f'{dt.isoformat()} {txt}')
-            
     
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -73,22 +70,15 @@ class ThresholdStrategy(bt.Strategy):
     def next(self):
         """每日执行"""
         self.counter += 1
-        self.log('=' * 60)
-        self.log(f'  每日之星:{self.counter}')
         
-        # 按频率调仓
         if self.counter % self.config.rebalance_freq != 0:
-            self.log(f'  没到调仓频率')
             return
         
         current_date = pd.Timestamp(self.datas[0].datetime.date(0))
         today_signals = self.signals.get(current_date, [])
         
         if not today_signals:
-            self.log(f'  今天没有signals')
             return
-
-        self.log(f'  today signals: {len(today_signals)}')
         
         # 获取当前持仓
         positions = {}
@@ -98,15 +88,12 @@ class ThresholdStrategy(bt.Strategy):
             if pos.size > 0:
                 positions[data._name] = pos.size
                 buy_prices[data._name] = pos.price
-
-        self.log(f'  buy_prices: {len(buy_prices)}')
         
         # ===== 卖出逻辑 =====
         for code, pred in today_signals:
-            # 卖出条件1: 预测收益 < 卖出阈值
             sell_signal = pred < self.config.sell_threshold
             
-            # 卖出条件2: 止损（如果启用)
+            # 止损检查
             if self.config.use_stop_loss and code in positions:
                 current_price = None
                 for data in self.datas:
@@ -155,15 +142,13 @@ class ThresholdStrategy(bt.Strategy):
                         cash_needed = size * current_price * 1.001
                         if cash_needed <= self.broker.getcash():
                             self.buy(data=data, size=size)
-                            self.log(f'  买入信号 {code}: 预测{pred:.4f}, 仓位{target_value/total_value*100:.1f}%')
+                            self.log(f'  买入信号 {code}: 预测{pred:.4f}')
                     break
     
     def stop(self):
-        """策略结束"""
         self.log('=' * 60)
         self.log('策略结束')
-        self.log(f'最终资金: {self.broker.getvalue():,.2f}')
-        self.log(f'总收益率: {(self.broker.getvalue()/self.broker.startingcash-1)*100:.2f}%')
+        self.log(f'最终资金: {self.broker.getvalue():.2f}')
 
 
 def run_threshold_backtest(
@@ -178,11 +163,11 @@ def run_threshold_backtest(
     rebalance_freq: int = 1,
     initial_cash: float = 100000.0,
     commission: float = 0.001,
+    max_stocks: int = 100,
     print_log: bool = True
 ) -> Dict:
-    """
-    运行 Threshold 策略回测（简化接口)
-    """
+    """运行 Threshold 策略回测"""
+    
     print("=" * 70)
     print("🚀 Threshold 策略回测")
     print("=" * 70)
@@ -191,14 +176,7 @@ def run_threshold_backtest(
     print(f"   卖出阈值: {sell_threshold*100:.2f}%")
     print(f"   最大持仓: {max_positions}只")
     print(f"   调仓频率: 每{rebalance_freq}天")
-
-    print(f"总行数: {len(test_df)}")
-    print(f"每列缺失值数量:\n{test_df.isnull().sum()}")
     
-    # 重点检查：去掉任何一行有缺失值的行后，还剩多少？
-    clean_df = test_df.dropna()
-    print(f"去除 NaN 后的有效行数: {len(clean_df)}")
-
     # 准备信号
     signals = {}
     for date, group in test_df.groupby(date_col):
@@ -206,61 +184,14 @@ def run_threshold_backtest(
         for _, row in group.iterrows():
             daily.append((str(row[code_col]), row[pred_col]))
         signals[date] = daily
-
-    # 假设 signals 已经生成
-    print(f"{'='*70}")
-    print("📊 Signals 信号字典检查")
-    print(f"{'='*70}")
     
-    # 1. 基本信息
-    print(f"\n📋 基本信息:")
-    print(f"   总交易日数: {len(signals)}")
-    print(f"   日期范围: {min(signals.keys())} ~ {max(signals.keys())}")
-    
-    # 2. 打印前5天的详细信号
-    print(f"\n📅 前5个交易日的信号:")
-    for i, (date, daily_signals) in enumerate(sorted(signals.items())[:5]):
-      print(f"\n   {date} ({len(daily_signals)}只股票):")
-      # 排序显示前10只
-      sorted_daily = sorted(daily_signals, key=lambda x: x[1], reverse=True)[:10]
-      for code, pred in sorted_daily:
-          print(f"      {code}: {pred:.6f}")
-    
-    # 3. 统计每天的股票数量
-    signal_counts = {date: len(daily) for date, daily in signals.items()}
-    counts_df = pd.DataFrame(list(signal_counts.items()), columns=['date', 'stock_count'])
-    
-    print(f"\n📈 每日信号数量统计:")
-    print(f"   最小: {counts_df['stock_count'].min()}")
-    print(f"   最大: {counts_df['stock_count'].max()}")
-    print(f"   平均: {counts_df['stock_count'].mean():.1f}")
-    print(f"   中位数: {counts_df['stock_count'].median()}")
-    
-    # 4. 所有预测值的分布
+    # 打印信号统计
+    print(f"\n📊 信号统计:")
+    print(f"   总交易日: {len(signals)}天")
     all_preds = [pred for daily in signals.values() for _, pred in daily]
-    import numpy as np
-    print(f"\n🔮 所有预测值分布:")
-    print(f"   总数: {len(all_preds)}")
-    print(f"   最小值: {min(all_preds):.6f}")
-    print(f"   最大值: {max(all_preds):.6f}")
-    print(f"   均值: {np.mean(all_preds):.6f}")
-    print(f"   中位数: {np.median(all_preds):.6f}")
-    print(f"   标准差: {np.std(all_preds):.6f}")
-    print(f"   正预测比例: {sum(1 for p in all_preds if p > 0) / len(all_preds) * 100:.2f}%")
-    
-    # 5. 保存到CSV（方便查看）
-    signals_export = []
-    for date, daily in signals.items():
-      for code, pred in daily:
-          signals_export.append({'date': date, 'code': code, 'pred_return': pred})
-    
-    signals_df = pd.DataFrame(signals_export)
-    output_file = './data/signals_check.csv'
-    signals_df.to_csv(output_file, index=False, encoding='utf-8-sig')
-    print(f"\n💾 已导出到: {output_file}")
-    print(f"   总行数: {len(signals_df)}")
-
-    
+    print(f"   总预测数: {len(all_preds)}")
+    print(f"   预测均值: {np.mean(all_preds):.6f}")
+    print(f"   正预测比例: {sum(1 for p in all_preds if p > 0) / len(all_preds) * 100:.1f}%")
     
     config = ThresholdConfig(
         buy_threshold=buy_threshold,
@@ -268,10 +199,8 @@ def run_threshold_backtest(
         max_positions=max_positions,
         rebalance_freq=rebalance_freq
     )
-
-
-    print(f"   signals length: {len(signals)}天")
     
+    # 初始化 Cerebro
     cerebro = bt.Cerebro()
     cerebro.addstrategy(
         ThresholdStrategy,
@@ -280,40 +209,73 @@ def run_threshold_backtest(
         print_log=print_log
     )
     
-    codes = test_df[code_col].unique()
+    # 只加载有信号的股票
+    signal_codes = set()
+    for daily in signals.values():
+        for code, _ in daily:
+            signal_codes.add(code)
     
+    codes = list(signal_codes)[:max_stocks]
+    
+    print(f"\n📂 加载数据:")
+    print(f"   有信号的股票: {len(signal_codes)}只")
+    print(f"   实际加载: {len(codes)}只")
+    
+    loaded_count = 0
     for code in codes:
         stock_df = test_df[test_df[code_col] == code].copy()
+        
+        if len(stock_df) < 5:
+            continue
+        
         stock_df = stock_df.sort_values(date_col)
         stock_df.set_index(date_col, inplace=True)
-
-        print(f" code: {code}")
-        print(f" stock df length: {len(stock_df)}")
         
-        #if len(stock_df) < 5:
-        #    continue
-
-        
-
-        data = bt.feeds.PandasData(
-            dataname=stock_df,
-            datetime=None,
-            open=price_col, high=price_col, low=price_col, close=price_col,
-            openinterest=-1
-        )
-        cerebro.adddata(data, name=str(code))
+        try:
+            data = bt.feeds.PandasData(
+                dataname=stock_df,
+                datetime=None,
+                open=price_col,
+                high=price_col,
+                low=price_col,
+                close=price_col,
+                openinterest=-1
+            )
+            cerebro.adddata(data, name=str(code))
+            loaded_count += 1
+        except Exception as e:
+            if print_log:
+                print(f"   ⚠️ 加载 {code} 失败: {e}")
     
+    print(f"   成功加载: {loaded_count}只")
+    
+    # Cerebro 数据检查（安全版本）
+    print(f"\n{'='*60}")
+    print("📊 Cerebro 数据检查")
+    print(f"{'='*60}")
+    print(f"\n加载的股票总数: {len(cerebro.datas)}")
+    
+    # 打印前5只股票的信息
+    print(f"\n前5只股票:")
+    for i, data in enumerate(cerebro.datas[:5]):
+        data_len = len(data)
+        print(f"  {i+1}. {data._name}: {data_len}条数据")
+    
+    # 检查空数据
+    empty_data = [d for d in cerebro.datas if len(d) == 0]
+    print(f"\n空数据股票数: {len(empty_data)}")
+    
+    # 设置资金和手续费
     cerebro.broker.setcash(initial_cash)
     cerebro.broker.setcommission(commission=commission)
     
+    # 添加分析器
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.02)
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
     cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
     
-    print(f"\n数据概览:")
-    print(f"   股票数: {len(codes)}")
-    print(f"   交易日: {test_df[date_col].nunique()}天")
+    # 运行
     print(f"\n💰 开始回测...")
     print("-" * 70)
     
@@ -321,6 +283,7 @@ def run_threshold_backtest(
     strat = results[0]
     final_value = cerebro.broker.getvalue()
     
+    # 获取分析结果
     returns_analyzer = strat.analyzers.returns.get_analysis()
     sharpe_analyzer = strat.analyzers.sharpe.get_analysis()
     drawdown_analyzer = strat.analyzers.drawdown.get_analysis()
@@ -348,4 +311,26 @@ def run_threshold_backtest(
     print(f"夏普比率: {result['sharpe_ratio']:.3f}")
     print(f"最大回撤: {result['max_drawdown']*100:.2f}%")
     
+    if trades_analyzer and trades_analyzer.get('total'):
+        total = trades_analyzer['total']['total']
+        won = trades_analyzer.get('won', {}).get('total', 0)
+        print(f"\n交易统计:")
+        print(f"   总交易: {total}")
+        print(f"   盈利: {won} ({won/total*100:.1f}%)")
+    
     return result
+
+
+if __name__ == '__main__':
+    import sys
+    sys.path.insert(0, '../..')
+    
+    from ml_framework.data_loader import StockDataLoader
+    from ml_framework.config import DATA_PATH
+    import numpy as np
+    
+    loader = StockDataLoader(DATA_PATH)
+    df = loader.load(years_back=1, select_codes=['000001', '000002', '600519'])
+    df['pred_return'] = np.random.randn(len(df)) * 0.03
+    
+    result = run_threshold_backtest(df, buy_threshold=0.01, sell_threshold=-0.005)
