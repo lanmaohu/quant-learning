@@ -92,22 +92,22 @@ class ThresholdStrategy(bt.Strategy):
             'cash': cash
         })
         
-        self.log('=' * 60)
-        self.log(f'  每日执行 #{self.counter}')
+        # self.log('=' * 60)
+        # self.log(f'  每日执行 #{self.counter}')
         
         # 按频率调仓
         if self.counter % self.config.rebalance_freq != 0:
-            self.log(f'  没到调仓频率')
+            # self.log(f'  没到调仓频率')
             return
         
         current_date = pd.Timestamp(self.datas[0].datetime.date(0))
         today_signals = self.signals.get(current_date, [])
         
         if not today_signals:
-            self.log(f'  今天没有signals')
+            # self.log(f'  今天没有signals')
             return
 
-        self.log(f'  today signals: {len(today_signals)}')
+        # self.log(f'  today signals: {len(today_signals)}')
         
         # 获取当前持仓
         positions = {}
@@ -302,281 +302,281 @@ def create_trade_chart(result: Dict, title: str = "Threshold Strategy", save_pat
     plt.show()
 
 
-def run_threshold_backtest(
-    test_df: pd.DataFrame,
-    pred_col: str = 'pred_return',
-    code_col: str = 'code',
-    date_col: str = 'date',
-    price_col: str = 'close',
-    buy_threshold: float = 0.02,
-    sell_threshold: float = -0.01,
-    max_positions: int = 10,
-    rebalance_freq: int = 1,
-    initial_cash: float = 100000.0,
-    commission: float = 0.001,
-    print_log: bool = True
-) -> Dict:
-    """
-    运行 Threshold 策略回测（标准版本 - 两次 groupby）
-    """
-    print("=" * 70)
-    print("🚀 Threshold 策略回测（标准版）")
-    print("=" * 70)
-    print(f"\n策略参数:")
-    print(f"   买入阈值: {buy_threshold*100:.2f}%")
-    print(f"   卖出阈值: {sell_threshold*100:.2f}%")
-    print(f"   最大持仓: {max_positions}只")
-    print(f"   调仓频率: 每{rebalance_freq}天")
+# def run_threshold_backtest(
+#     test_df: pd.DataFrame,
+#     pred_col: str = 'pred_return',
+#     code_col: str = 'code',
+#     date_col: str = 'date',
+#     price_col: str = 'close',
+#     buy_threshold: float = 0.02,
+#     sell_threshold: float = -0.01,
+#     max_positions: int = 10,
+#     rebalance_freq: int = 1,
+#     initial_cash: float = 100000.0,
+#     commission: float = 0.001,
+#     print_log: bool = True
+# ) -> Dict:
+#     """
+#     运行 Threshold 策略回测（标准版本 - 两次 groupby）
+#     """
+#     print("=" * 70)
+#     print("🚀 Threshold 策略回测（标准版）")
+#     print("=" * 70)
+#     print(f"\n策略参数:")
+#     print(f"   买入阈值: {buy_threshold*100:.2f}%")
+#     print(f"   卖出阈值: {sell_threshold*100:.2f}%")
+#     print(f"   最大持仓: {max_positions}只")
+#     print(f"   调仓频率: 每{rebalance_freq}天")
 
-    # 准备信号 - 第一次 groupby
-    signals = {}
-    for date, group in test_df.groupby(date_col):
-        daily = []
-        for _, row in group.iterrows():
-            daily.append((str(row[code_col]), row[pred_col]))
-        signals[date] = daily
+#     # 准备信号 - 第一次 groupby
+#     signals = {}
+#     for date, group in test_df.groupby(date_col):
+#         daily = []
+#         for _, row in group.iterrows():
+#             daily.append((str(row[code_col]), row[pred_col]))
+#         signals[date] = daily
 
-    config = ThresholdConfig(
-        buy_threshold=buy_threshold,
-        sell_threshold=sell_threshold,
-        max_positions=max_positions,
-        rebalance_freq=rebalance_freq
-    )
+#     config = ThresholdConfig(
+#         buy_threshold=buy_threshold,
+#         sell_threshold=sell_threshold,
+#         max_positions=max_positions,
+#         rebalance_freq=rebalance_freq
+#     )
 
-    cerebro = bt.Cerebro()
-    cerebro.addstrategy(
-        ThresholdStrategy,
-        config=config,
-        signals=signals,
-        print_log=print_log
-    )
+#     cerebro = bt.Cerebro()
+#     cerebro.addstrategy(
+#         ThresholdStrategy,
+#         config=config,
+#         signals=signals,
+#         print_log=print_log
+#     )
     
-    # 添加数据 - 第二次遍历
-    codes = test_df[code_col].unique()
-    for code in codes:
-        stock_df = test_df[test_df[code_col] == code].copy()
-        stock_df = stock_df.sort_values(date_col)
-        stock_df.set_index(date_col, inplace=True)
+#     # 添加数据 - 第二次遍历
+#     codes = test_df[code_col].unique()
+#     for code in codes:
+#         stock_df = test_df[test_df[code_col] == code].copy()
+#         stock_df = stock_df.sort_values(date_col)
+#         stock_df.set_index(date_col, inplace=True)
         
-        if len(stock_df) < 5:
-            continue
+#         if len(stock_df) < 5:
+#             continue
 
-        data = bt.feeds.PandasData(
-            dataname=stock_df,
-            datetime=None,
-            open=price_col, high=price_col, low=price_col, close=price_col,
-            openinterest=-1
-        )
-        cerebro.adddata(data, name=str(code))
+#         data = bt.feeds.PandasData(
+#             dataname=stock_df,
+#             datetime=None,
+#             open=price_col, high=price_col, low=price_col, close=price_col,
+#             openinterest=-1
+#         )
+#         cerebro.adddata(data, name=str(code))
 
-    cerebro.broker.setcash(initial_cash)
-    cerebro.broker.setcommission(commission=commission)
+#     cerebro.broker.setcash(initial_cash)
+#     cerebro.broker.setcommission(commission=commission)
     
-    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.02)
-    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+#     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.02)
+#     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+#     cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+#     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
 
-    print(f"\n💰 开始回测...")
-    print("-" * 70)
+#     print(f"\n💰 开始回测...")
+#     print("-" * 70)
     
-    results = cerebro.run()
-    strat = results[0]
-    final_value = cerebro.broker.getvalue()
+#     results = cerebro.run()
+#     strat = results[0]
+#     final_value = cerebro.broker.getvalue()
     
-    returns_analyzer = strat.analyzers.returns.get_analysis()
-    sharpe_analyzer = strat.analyzers.sharpe.get_analysis()
-    drawdown_analyzer = strat.analyzers.drawdown.get_analysis()
-    trades_analyzer = strat.analyzers.trades.get_analysis()
+#     returns_analyzer = strat.analyzers.returns.get_analysis()
+#     sharpe_analyzer = strat.analyzers.sharpe.get_analysis()
+#     drawdown_analyzer = strat.analyzers.drawdown.get_analysis()
+#     trades_analyzer = strat.analyzers.trades.get_analysis()
     
-    result = {
-        'strategy': 'Threshold',
-        'initial_cash': initial_cash,
-        'final_value': final_value,
-        'total_return': (final_value / initial_cash - 1),
-        'annual_return': returns_analyzer.get('rnorm', 0),
-        'sharpe_ratio': sharpe_analyzer.get('sharperatio', 0) or 0,
-        'max_drawdown': drawdown_analyzer['max']['drawdown'] if drawdown_analyzer['max'] else 0,
-        'trades': trades_analyzer,
-        'trade_log': strat.trade_log,
-        'portfolio_values': strat.portfolio_values  # 每日组合价值
-    }
+#     result = {
+#         'strategy': 'Threshold',
+#         'initial_cash': initial_cash,
+#         'final_value': final_value,
+#         'total_return': (final_value / initial_cash - 1),
+#         'annual_return': returns_analyzer.get('rnorm', 0),
+#         'sharpe_ratio': sharpe_analyzer.get('sharperatio', 0) or 0,
+#         'max_drawdown': drawdown_analyzer['max']['drawdown'] if drawdown_analyzer['max'] else 0,
+#         'trades': trades_analyzer,
+#         'trade_log': strat.trade_log,
+#         'portfolio_values': strat.portfolio_values  # 每日组合价值
+#     }
     
-    print("-" * 70)
-    print(f"💰 最终资金: {final_value:,.2f}")
-    print("\n" + "=" * 70)
-    print("📊 回测结果")
-    print("=" * 70)
-    print(f"总收益率: {result['total_return']*100:.2f}%")
-    print(f"年化收益率: {result['annual_return']*100:.2f}%")
-    print(f"夏普比率: {result['sharpe_ratio']:.3f}")
-    print(f"最大回撤: {result['max_drawdown']*100:.2f}%")
+#     print("-" * 70)
+#     print(f"💰 最终资金: {final_value:,.2f}")
+#     print("\n" + "=" * 70)
+#     print("📊 回测结果")
+#     print("=" * 70)
+#     print(f"总收益率: {result['total_return']*100:.2f}%")
+#     print(f"年化收益率: {result['annual_return']*100:.2f}%")
+#     print(f"夏普比率: {result['sharpe_ratio']:.3f}")
+#     print(f"最大回撤: {result['max_drawdown']*100:.2f}%")
     
-    return result
+#     return result
 
 
-def run_threshold_backtest_optimized(
-    test_df: pd.DataFrame,
-    pred_col: str = 'pred_return',
-    code_col: str = 'code',
-    date_col: str = 'date',
-    price_col: str = 'close',
-    buy_threshold: float = 0.02,
-    sell_threshold: float = -0.01,
-    max_positions: int = 10,
-    rebalance_freq: int = 1,
-    min_data_days: int = 5,
-    initial_cash: float = 100000.0,
-    commission: float = 0.001,
-    print_log: bool = True
-) -> Dict:
-    """
-    运行 Threshold 策略回测（优化版本 - Signals 和 Data 在一个 Loop 中处理）
-    """
-    start_time = time.time()
+# def run_threshold_backtest_optimized(
+#     test_df: pd.DataFrame,
+#     pred_col: str = 'pred_return',
+#     code_col: str = 'code',
+#     date_col: str = 'date',
+#     price_col: str = 'close',
+#     buy_threshold: float = 0.02,
+#     sell_threshold: float = -0.01,
+#     max_positions: int = 10,
+#     rebalance_freq: int = 1,
+#     min_data_days: int = 5,
+#     initial_cash: float = 100000.0,
+#     commission: float = 0.001,
+#     print_log: bool = True
+# ) -> Dict:
+#     """
+#     运行 Threshold 策略回测（优化版本 - Signals 和 Data 在一个 Loop 中处理）
+#     """
+#     start_time = time.time()
     
-    print("=" * 70)
-    print("🚀 Threshold 策略回测（优化版 - Single Loop）")
-    print("=" * 70)
-    print(f"\n策略参数:")
-    print(f"   买入阈值: {buy_threshold*100:.2f}%")
-    print(f"   卖出阈值: {sell_threshold*100:.2f}%")
-    print(f"   最大持仓: {max_positions}只")
-    print(f"   调仓频率: 每{rebalance_freq}天")
-    print(f"   最小数据天数: {min_data_days}")
+#     print("=" * 70)
+#     print("🚀 Threshold 策略回测（优化版 - Single Loop）")
+#     print("=" * 70)
+#     print(f"\n策略参数:")
+#     print(f"   买入阈值: {buy_threshold*100:.2f}%")
+#     print(f"   卖出阈值: {sell_threshold*100:.2f}%")
+#     print(f"   最大持仓: {max_positions}只")
+#     print(f"   调仓频率: 每{rebalance_freq}天")
+#     print(f"   最小数据天数: {min_data_days}")
     
-    # 初始化
-    signals = {}
-    cerebro = bt.Cerebro()
+#     # 初始化
+#     signals = {}
+#     cerebro = bt.Cerebro()
     
-    # 获取所有唯一股票代码
-    all_codes = test_df[code_col].unique()
-    print(f"\n📊 开始处理 {len(all_codes)} 只股票...")
+#     # 获取所有唯一股票代码
+#     all_codes = test_df[code_col].unique()
+#     print(f"\n📊 开始处理 {len(all_codes)} 只股票...")
     
-    n_added = 0
-    n_skipped = 0
-    total_signals = 0
+#     n_added = 0
+#     n_skipped = 0
+#     total_signals = 0
     
-    for i, code in enumerate(all_codes):
-        if print_log and (i + 1) % 50 == 0:
-            print(f"   处理进度: {i+1}/{len(all_codes)} ({(i+1)/len(all_codes)*100:.1f}%)")
+#     for i, code in enumerate(all_codes):
+#         if print_log and (i + 1) % 50 == 0:
+#             print(f"   处理进度: {i+1}/{len(all_codes)} ({(i+1)/len(all_codes)*100:.1f}%)")
         
-        # 获取单只股票数据
-        stock_df = test_df[test_df[code_col] == code].copy()
+#         # 获取单只股票数据
+#         stock_df = test_df[test_df[code_col] == code].copy()
         
-        # 检查数据量
-        if len(stock_df) < min_data_days:
-            n_skipped += 1
-            continue
+#         # 检查数据量
+#         if len(stock_df) < min_data_days:
+#             n_skipped += 1
+#             continue
         
-        # 排序
-        stock_df = stock_df.sort_values(date_col)
+#         # 排序
+#         stock_df = stock_df.sort_values(date_col)
         
-        # ========== 1. 构建 Signals ==========
-        for _, row in stock_df.iterrows():
-            date = row[date_col]
-            score = row[pred_col]
+#         # ========== 1. 构建 Signals ==========
+#         for _, row in stock_df.iterrows():
+#             date = row[date_col]
+#             score = row[pred_col]
             
-            if date not in signals:
-                signals[date] = []
-            signals[date].append((str(code), score))
-            total_signals += 1
+#             if date not in signals:
+#                 signals[date] = []
+#             signals[date].append((str(code), score))
+#             total_signals += 1
         
-        # ========== 2. 添加 Data 到 Cerebro ==========
-        stock_df.set_index(date_col, inplace=True)
+#         # ========== 2. 添加 Data 到 Cerebro ==========
+#         stock_df.set_index(date_col, inplace=True)
         
-        data = bt.feeds.PandasData(
-            dataname=stock_df,
-            datetime=None,
-            open=price_col, 
-            high=price_col, 
-            low=price_col, 
-            close=price_col,
-            openinterest=-1
-        )
-        cerebro.adddata(data, name=str(code))
-        n_added += 1
+#         data = bt.feeds.PandasData(
+#             dataname=stock_df,
+#             datetime=None,
+#             open=price_col, 
+#             high=price_col, 
+#             low=price_col, 
+#             close=price_col,
+#             openinterest=-1
+#         )
+#         cerebro.adddata(data, name=str(code))
+#         n_added += 1
     
-    elapsed = time.time() - start_time
-    print(f"\n✅ 数据处理完成 ({elapsed:.2f}s):")
-    print(f"   成功添加: {n_added} 只股票")
-    print(f"   跳过(数据不足): {n_skipped} 只")
-    print(f"   总信号数: {total_signals:,}")
-    print(f"   交易日期: {len(signals)} 天")
+#     elapsed = time.time() - start_time
+#     print(f"\n✅ 数据处理完成 ({elapsed:.2f}s):")
+#     print(f"   成功添加: {n_added} 只股票")
+#     print(f"   跳过(数据不足): {n_skipped} 只")
+#     print(f"   总信号数: {total_signals:,}")
+#     print(f"   交易日期: {len(signals)} 天")
     
-    if n_added == 0:
-        raise ValueError("没有有效的股票数据，请检查输入数据")
+#     if n_added == 0:
+#         raise ValueError("没有有效的股票数据，请检查输入数据")
     
-    # 创建配置
-    config = ThresholdConfig(
-        buy_threshold=buy_threshold,
-        sell_threshold=sell_threshold,
-        max_positions=max_positions,
-        rebalance_freq=rebalance_freq
-    )
+#     # 创建配置
+#     config = ThresholdConfig(
+#         buy_threshold=buy_threshold,
+#         sell_threshold=sell_threshold,
+#         max_positions=max_positions,
+#         rebalance_freq=rebalance_freq
+#     )
     
-    # 添加策略
-    cerebro.addstrategy(
-        ThresholdStrategy,
-        config=config,
-        signals=signals,
-        print_log=print_log
-    )
+#     # 添加策略
+#     cerebro.addstrategy(
+#         ThresholdStrategy,
+#         config=config,
+#         signals=signals,
+#         print_log=print_log
+#     )
     
-    # 设置经纪商
-    cerebro.broker.setcash(initial_cash)
-    cerebro.broker.setcommission(commission=commission)
+#     # 设置经纪商
+#     cerebro.broker.setcash(initial_cash)
+#     cerebro.broker.setcommission(commission=commission)
     
-    # 添加分析器
-    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.02)
-    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+#     # 添加分析器
+#     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.02)
+#     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+#     cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+#     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
     
-    # 运行回测
-    print(f"\n💰 开始回测...")
-    print("-" * 70)
+#     # 运行回测
+#     print(f"\n💰 开始回测...")
+#     print("-" * 70)
     
-    results = cerebro.run()
-    strat = results[0]
-    final_value = cerebro.broker.getvalue()
+#     results = cerebro.run()
+#     strat = results[0]
+#     final_value = cerebro.broker.getvalue()
     
-    # 获取分析结果
-    returns_analyzer = strat.analyzers.returns.get_analysis()
-    sharpe_analyzer = strat.analyzers.sharpe.get_analysis()
-    drawdown_analyzer = strat.analyzers.drawdown.get_analysis()
-    trades_analyzer = strat.analyzers.trades.get_analysis()
+#     # 获取分析结果
+#     returns_analyzer = strat.analyzers.returns.get_analysis()
+#     sharpe_analyzer = strat.analyzers.sharpe.get_analysis()
+#     drawdown_analyzer = strat.analyzers.drawdown.get_analysis()
+#     trades_analyzer = strat.analyzers.trades.get_analysis()
     
-    total_time = time.time() - start_time
+#     total_time = time.time() - start_time
     
-    result = {
-        'strategy': 'Threshold_Optimized',
-        'initial_cash': initial_cash,
-        'final_value': final_value,
-        'total_return': (final_value / initial_cash - 1),
-        'annual_return': returns_analyzer.get('rnorm', 0),
-        'sharpe_ratio': sharpe_analyzer.get('sharperatio', 0) or 0,
-        'max_drawdown': drawdown_analyzer['max']['drawdown'] if drawdown_analyzer['max'] else 0,
-        'trades': trades_analyzer,
-        'trade_log': strat.trade_log,
-        'portfolio_values': strat.portfolio_values,
-        'n_stocks': n_added,
-        'n_signals': total_signals,
-        'elapsed_time': total_time
-    }
+#     result = {
+#         'strategy': 'Threshold_Optimized',
+#         'initial_cash': initial_cash,
+#         'final_value': final_value,
+#         'total_return': (final_value / initial_cash - 1),
+#         'annual_return': returns_analyzer.get('rnorm', 0),
+#         'sharpe_ratio': sharpe_analyzer.get('sharperatio', 0) or 0,
+#         'max_drawdown': drawdown_analyzer['max']['drawdown'] if drawdown_analyzer['max'] else 0,
+#         'trades': trades_analyzer,
+#         'trade_log': strat.trade_log,
+#         'portfolio_values': strat.portfolio_values,
+#         'n_stocks': n_added,
+#         'n_signals': total_signals,
+#         'elapsed_time': total_time
+#     }
     
-    print("-" * 70)
-    print(f"💰 最终资金: {final_value:,.2f}")
-    print(f"\n📊 总耗时: {total_time:.2f}s")
-    print("=" * 70)
-    print("📊 回测结果")
-    print("=" * 70)
-    print(f"总收益率: {result['total_return']*100:.2f}%")
-    print(f"年化收益率: {result['annual_return']*100:.2f}%")
-    print(f"夏普比率: {result['sharpe_ratio']:.3f}")
-    print(f"最大回撤: {result['max_drawdown']*100:.2f}%")
+#     print("-" * 70)
+#     print(f"💰 最终资金: {final_value:,.2f}")
+#     print(f"\n📊 总耗时: {total_time:.2f}s")
+#     print("=" * 70)
+#     print("📊 回测结果")
+#     print("=" * 70)
+#     print(f"总收益率: {result['total_return']*100:.2f}%")
+#     print(f"年化收益率: {result['annual_return']*100:.2f}%")
+#     print(f"夏普比率: {result['sharpe_ratio']:.3f}")
+#     print(f"最大回撤: {result['max_drawdown']*100:.2f}%")
     
-    return result
+#     return result
 
 
 def run_threshold_backtest_ultra(
@@ -837,13 +837,16 @@ def analyze_trade_profit_loss(result: Dict, save_path: str = None):
     # 按盈亏降序排列
     analysis_sorted = analysis_df.sort_values('profit', ascending=False)
     
-    print(f"{'排名':<4} {'代码':<10} {'买入日期':<12} {'卖出日期':<12} {'收益率':<10} {'盈亏':<12} {'持仓天数':<8}")
-    print("-" * 70)
+    print(f"{'排名':<4} {'代码':<10} {'买入价':<10} {'卖出价':<10} {'股数':<10} {'收益率':<10} {'盈亏':<12} {'持仓天数':<8}")
+    print("-" * 90)
     
     for i, (_, row) in enumerate(analysis_sorted.iterrows(), 1):
         profit_str = f"{row['profit']:>+.2f}"
-        print(f"{i:<4} {row['code']:<10} {row['buy_date'].strftime('%Y-%m-%d'):<12} "
-              f"{row['sell_date'].strftime('%Y-%m-%d'):<12} {row['profit_pct']:>+8.2f}% "
+        print(f"{i:<4} {row['code']:<10} "
+              f"{row['buy_price']:<10.2f} "
+              f"{row['sell_price']:<10.2f} "
+              f"{int(row['size']):<10} "
+              f"{row['profit_pct']:>+8.2f}% "
               f"{profit_str:<12} {int(row['holding_days']):<8}")
     
     print("=" * 70)

@@ -793,13 +793,16 @@ def analyze_trade_profit_loss(result: Dict, save_path: str = None):
     # 按盈亏降序排列
     analysis_sorted = analysis_df.sort_values('profit', ascending=False)
     
-    print(f"{'排名':<4} {'代码':<10} {'买入日期':<12} {'卖出日期':<12} {'收益率':<10} {'盈亏':<12} {'持仓天数':<8}")
-    print("-" * 70)
+    print(f"{'排名':<4} {'代码':<10} {'买入价':<10} {'卖出价':<10} {'股数':<10} {'收益率':<10} {'盈亏':<12} {'持仓天数':<8}")
+    print("-" * 90)
     
     for i, (_, row) in enumerate(analysis_sorted.iterrows(), 1):
         profit_str = f"{row['profit']:>+.2f}"
-        print(f"{i:<4} {row['code']:<10} {row['buy_date'].strftime('%Y-%m-%d'):<12} "
-              f"{row['sell_date'].strftime('%Y-%m-%d'):<12} {row['profit_pct']:>+8.2f}% "
+        print(f"{i:<4} {row['code']:<10} "
+              f"{row['buy_price']:<10.2f} "
+              f"{row['sell_price']:<10.2f} "
+              f"{int(row['size']):<10} "
+              f"{row['profit_pct']:>+8.2f}% "
               f"{profit_str:<12} {int(row['holding_days']):<8}")
     
     print("=" * 70)
