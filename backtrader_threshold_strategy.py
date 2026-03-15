@@ -718,3 +718,193 @@ if __name__ == '__main__':
     print("  4. create_trade_chart() - 绘制交易图表（收益曲线+买卖点）")
     print("\n推荐使用 run_threshold_backtest_ultra() 获得最佳性能")
     print("使用 create_trade_chart(result) 可视化回测结果")
+
+
+def analyze_trade_profit_loss(result: Dict, save_path: str = None):
+    """
+    分析所有交易的盈亏情况
+    
+    Parameters:
+    -----------
+    result : dict
+        回测结果字典（包含 trade_log）
+    save_path : str, optional
+        保存图表路径
+    
+    Returns:
+    --------
+    analysis_df : pd.DataFrame
+        每笔交易的盈亏明细
+    """
+    import matplotlib.pyplot as plt
+    
+    trade_log = result.get('trade_log', [])
+    if not trade_log:
+        print("⚠️ 没有交易记录")
+        return None
+    
+    # 将交易记录转为DataFrame
+    trades_df = pd.DataFrame(trade_log)
+    trades_df['date'] = pd.to_datetime(trades_df['date'])
+    
+    # 匹配买入和卖出记录
+    buy_trades = trades_df[trades_df['type'] == 'buy'].copy()
+    sell_trades = trades_df[trades_df['type'] == 'sell'].copy()
+    
+    # 按股票代码匹配买卖记录
+    completed_trades = []
+    
+    for code in trades_df['code'].unique():
+        code_buys = buy_trades[buy_trades['code'] == code].sort_values('date')
+        code_sells = sell_trades[sell_trades['code'] == code].sort_values('date')
+        
+        # 简单的 FIFO 匹配
+        for idx, sell in code_sells.iterrows():
+            # 找到这次卖出之前的买入记录
+            matching_buys = code_buys[code_buys['date'] < sell['date']]
+            if len(matching_buys) > 0:
+                buy = matching_buys.iloc[-1]  # 取最近的一次买入
+                
+                # 计算盈亏
+                buy_value = buy['size'] * buy['price']
+                sell_value = sell['size'] * sell['price']
+                profit = sell_value - buy_value
+                profit_pct = (sell['price'] - buy['price']) / buy['price'] * 100
+                
+                holding_days = (sell['date'] - buy['date']).days
+                
+                completed_trades.append({
+                    'code': code,
+                    'buy_date': buy['date'],
+                    'sell_date': sell['date'],
+                    'buy_price': buy['price'],
+                    'sell_price': sell['price'],
+                    'size': sell['size'],
+                    'profit': profit,
+                    'profit_pct': profit_pct,
+                    'holding_days': holding_days
+                })
+                
+                # 移除已匹配的买入记录
+                code_buys = code_buys.drop(buy.name)
+    
+    if not completed_trades:
+        print("⚠️ 没有完成的交易对（需要有买入和卖出记录）")
+        return None
+    
+    analysis_df = pd.DataFrame(completed_trades)
+    
+    # ===== 打印统计信息 =====
+    print("\n" + "=" * 70)
+    print("📊 交易盈亏分析")
+    print("=" * 70)
+    
+    total_trades = len(analysis_df)
+    winning_trades = len(analysis_df[analysis_df['profit'] > 0])
+    losing_trades = len(analysis_df[analysis_df['profit'] < 0])
+    win_rate = winning_trades / total_trades * 100 if total_trades > 0 else 0
+    
+    total_profit = analysis_df['profit'].sum()
+    avg_profit = analysis_df['profit'].mean()
+    avg_profit_pct = analysis_df['profit_pct'].mean()
+    
+    print(f"\n总交易次数: {total_trades}")
+    print(f"盈利次数: {winning_trades} ({win_rate:.1f}%)")
+    print(f"亏损次数: {losing_trades} ({100-win_rate:.1f}%)")
+    print(f"\n总盈亏: {total_profit:,.2f}")
+    print(f"平均盈亏: {avg_profit:,.2f}")
+    print(f"平均收益率: {avg_profit_pct:.2f}%")
+    
+    if winning_trades > 0:
+        avg_win = analysis_df[analysis_df['profit'] > 0]['profit'].mean()
+        max_win = analysis_df[analysis_df['profit'] > 0]['profit'].max()
+        print(f"\n平均盈利: {avg_win:,.2f}")
+        print(f"最大盈利: {max_win:,.2f}")
+    
+    if losing_trades > 0:
+        avg_loss = analysis_df[analysis_df['profit'] < 0]['profit'].mean()
+        max_loss = analysis_df[analysis_df['profit'] < 0]['profit'].min()
+        print(f"平均亏损: {avg_loss:,.2f}")
+        print(f"最大亏损: {max_loss:,.2f}")
+    
+    print(f"\n平均持仓天数: {analysis_df['holding_days'].mean():.1f}天")
+    
+    # ===== 显示每笔交易明细 =====
+    print("\n" + "-" * 70)
+    print("📋 交易明细（按盈亏排序）")
+    print("-" * 70)
+    
+    # 按盈亏降序排列
+    analysis_sorted = analysis_df.sort_values('profit', ascending=False)
+    
+    print(f"{'排名':<4} {'代码':<10} {'买入日期':<12} {'卖出日期':<12} {'收益率':<10} {'盈亏':<12} {'持仓天数':<8}")
+    print("-" * 70)
+    
+    for i, (_, row) in enumerate(analysis_sorted.iterrows(), 1):
+        profit_str = f"{row['profit']:>+.2f}"
+        print(f"{i:<4} {row['code']:<10} {row['buy_date'].strftime('%Y-%m-%d'):<12} "
+              f"{row['sell_date'].strftime('%Y-%m-%d'):<12} {row['profit_pct']:>+8.2f}% "
+              f"{profit_str:<12} {int(row['holding_days']):<8}")
+    
+    print("=" * 70)
+    
+    # ===== 可视化 =====
+    if save_path is not None:
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        
+        # 1. 盈亏分布直方图
+        ax1 = axes[0, 0]
+        colors = ['green' if p > 0 else 'red' for p in analysis_df['profit_pct']]
+        ax1.bar(range(len(analysis_df)), analysis_df['profit_pct'].sort_values(ascending=True), 
+                color=['green' if p > 0 else 'red' for p in analysis_df['profit_pct'].sort_values(ascending=True)])
+        ax1.axhline(0, color='black', linestyle='-', linewidth=0.5)
+        ax1.set_xlabel('Trade')
+        ax1.set_ylabel('Profit %')
+        ax1.set_title('Trade P&L Distribution (Sorted)')
+        ax1.grid(True, alpha=0.3)
+        
+        # 2. 盈亏散点图（按时间）
+        ax2 = axes[0, 1]
+        scatter_colors = ['green' if p > 0 else 'red' for p in analysis_df['profit']]
+        ax2.scatter(analysis_df['buy_date'], analysis_df['profit_pct'], 
+                   c=scatter_colors, alpha=0.6, s=50)
+        ax2.axhline(0, color='black', linestyle='--', alpha=0.5)
+        ax2.set_xlabel('Buy Date')
+        ax2.set_ylabel('Profit %')
+        ax2.set_title('Trade P&L Over Time')
+        ax2.grid(True, alpha=0.3)
+        
+        # 3. 累计盈亏曲线
+        ax3 = axes[1, 0]
+        analysis_sorted_by_date = analysis_df.sort_values('sell_date')
+        analysis_sorted_by_date['cum_profit'] = analysis_sorted_by_date['profit'].cumsum()
+        ax3.plot(analysis_sorted_by_date['sell_date'], analysis_sorted_by_date['cum_profit'], 
+                linewidth=2, color='steelblue')
+        ax3.fill_between(analysis_sorted_by_date['sell_date'], 0, 
+                        analysis_sorted_by_date['cum_profit'],
+                        where=analysis_sorted_by_date['cum_profit'] >= 0, alpha=0.3, color='green')
+        ax3.fill_between(analysis_sorted_by_date['sell_date'], 0, 
+                        analysis_sorted_by_date['cum_profit'],
+                        where=analysis_sorted_by_date['cum_profit'] < 0, alpha=0.3, color='red')
+        ax3.axhline(0, color='black', linestyle='--', alpha=0.5)
+        ax3.set_xlabel('Date')
+        ax3.set_ylabel('Cumulative Profit')
+        ax3.set_title('Cumulative Trade P&L')
+        ax3.grid(True, alpha=0.3)
+        
+        # 4. 盈亏饼图
+        ax4 = axes[1, 1]
+        labels = ['Win', 'Loss']
+        sizes = [winning_trades, losing_trades]
+        colors = ['#66b3ff', '#ff9999']
+        explode = (0.05, 0)
+        ax4.pie(sizes, explode=explode, labels=labels, colors=colors, autopct='%1.1f%%',
+               shadow=True, startangle=90)
+        ax4.set_title(f'Win Rate ({win_rate:.1f}%)')
+        
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"✅ 盈亏分析图表已保存: {save_path}")
+        plt.show()
+    
+    return analysis_df
