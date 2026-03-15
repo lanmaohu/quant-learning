@@ -48,6 +48,7 @@ class ThresholdStrategy(bt.Strategy):
         if self.params.print_log:
             dt = dt or self.datas[0].datetime.date(0)
             print(f'{dt.isoformat()} {txt}')
+            
     
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -72,15 +73,19 @@ class ThresholdStrategy(bt.Strategy):
     def next(self):
         """每日执行"""
         self.counter += 1
+        self.log('=' * 60)
+        self.log(f'  每日之星:{self.counter}')
         
         # 按频率调仓
         if self.counter % self.config.rebalance_freq != 0:
+            self.log(f'  没到调仓频率')
             return
         
         current_date = pd.Timestamp(self.datas[0].datetime.date(0))
         today_signals = self.signals.get(current_date, [])
         
         if not today_signals:
+            self.log(f'  今天没有signals')
             return
 
         self.log(f'  today signals: {len(today_signals)}')
@@ -173,7 +178,6 @@ def run_threshold_backtest(
     rebalance_freq: int = 1,
     initial_cash: float = 100000.0,
     commission: float = 0.001,
-    max_stocks: int = 100,
     print_log: bool = True
 ) -> Dict:
     """
@@ -187,7 +191,14 @@ def run_threshold_backtest(
     print(f"   卖出阈值: {sell_threshold*100:.2f}%")
     print(f"   最大持仓: {max_positions}只")
     print(f"   调仓频率: 每{rebalance_freq}天")
+
+    print(f"总行数: {len(test_df)}")
+    print(f"每列缺失值数量:\n{test_df.isnull().sum()}")
     
+    # 重点检查：去掉任何一行有缺失值的行后，还剩多少？
+    clean_df = test_df.dropna()
+    print(f"去除 NaN 后的有效行数: {len(clean_df)}")
+
     # 准备信号
     signals = {}
     for date, group in test_df.groupby(date_col):
@@ -195,6 +206,61 @@ def run_threshold_backtest(
         for _, row in group.iterrows():
             daily.append((str(row[code_col]), row[pred_col]))
         signals[date] = daily
+
+    # 假设 signals 已经生成
+    print(f"{'='*70}")
+    print("📊 Signals 信号字典检查")
+    print(f"{'='*70}")
+    
+    # 1. 基本信息
+    print(f"\n📋 基本信息:")
+    print(f"   总交易日数: {len(signals)}")
+    print(f"   日期范围: {min(signals.keys())} ~ {max(signals.keys())}")
+    
+    # 2. 打印前5天的详细信号
+    print(f"\n📅 前5个交易日的信号:")
+    for i, (date, daily_signals) in enumerate(sorted(signals.items())[:5]):
+      print(f"\n   {date} ({len(daily_signals)}只股票):")
+      # 排序显示前10只
+      sorted_daily = sorted(daily_signals, key=lambda x: x[1], reverse=True)[:10]
+      for code, pred in sorted_daily:
+          print(f"      {code}: {pred:.6f}")
+    
+    # 3. 统计每天的股票数量
+    signal_counts = {date: len(daily) for date, daily in signals.items()}
+    counts_df = pd.DataFrame(list(signal_counts.items()), columns=['date', 'stock_count'])
+    
+    print(f"\n📈 每日信号数量统计:")
+    print(f"   最小: {counts_df['stock_count'].min()}")
+    print(f"   最大: {counts_df['stock_count'].max()}")
+    print(f"   平均: {counts_df['stock_count'].mean():.1f}")
+    print(f"   中位数: {counts_df['stock_count'].median()}")
+    
+    # 4. 所有预测值的分布
+    all_preds = [pred for daily in signals.values() for _, pred in daily]
+    import numpy as np
+    print(f"\n🔮 所有预测值分布:")
+    print(f"   总数: {len(all_preds)}")
+    print(f"   最小值: {min(all_preds):.6f}")
+    print(f"   最大值: {max(all_preds):.6f}")
+    print(f"   均值: {np.mean(all_preds):.6f}")
+    print(f"   中位数: {np.median(all_preds):.6f}")
+    print(f"   标准差: {np.std(all_preds):.6f}")
+    print(f"   正预测比例: {sum(1 for p in all_preds if p > 0) / len(all_preds) * 100:.2f}%")
+    
+    # 5. 保存到CSV（方便查看）
+    signals_export = []
+    for date, daily in signals.items():
+      for code, pred in daily:
+          signals_export.append({'date': date, 'code': code, 'pred_return': pred})
+    
+    signals_df = pd.DataFrame(signals_export)
+    output_file = './data/signals_check.csv'
+    signals_df.to_csv(output_file, index=False, encoding='utf-8-sig')
+    print(f"\n💾 已导出到: {output_file}")
+    print(f"   总行数: {len(signals_df)}")
+
+    
     
     config = ThresholdConfig(
         buy_threshold=buy_threshold,
@@ -202,6 +268,9 @@ def run_threshold_backtest(
         max_positions=max_positions,
         rebalance_freq=rebalance_freq
     )
+
+
+    print(f"   signals length: {len(signals)}天")
     
     cerebro = bt.Cerebro()
     cerebro.addstrategy(
@@ -211,16 +280,21 @@ def run_threshold_backtest(
         print_log=print_log
     )
     
-    codes = test_df[code_col].unique()[:max_stocks]
+    codes = test_df[code_col].unique()
     
     for code in codes:
         stock_df = test_df[test_df[code_col] == code].copy()
         stock_df = stock_df.sort_values(date_col)
         stock_df.set_index(date_col, inplace=True)
+
+        print(f" code: {code}")
+        print(f" stock df length: {len(stock_df)}")
         
-        if len(stock_df) < 5:
-            continue
+        #if len(stock_df) < 5:
+        #    continue
+
         
+
         data = bt.feeds.PandasData(
             dataname=stock_df,
             datetime=None,
