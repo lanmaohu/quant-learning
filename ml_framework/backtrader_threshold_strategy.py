@@ -298,7 +298,13 @@ def run_threshold_backtest(
         cerebro.adddata(data, name=str(code))
 
 
-
+    cerebro.broker.setcash(initial_cash)
+    cerebro.broker.setcommission(commission=commission)
+    
+    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.02)
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
 
 
     print(f"\n{'='*60}")
@@ -308,11 +314,6 @@ def run_threshold_backtest(
     # 1. 总共加载了多少只股票
     print(f"\n加载的股票总数: {len(cerebro.datas)}")
     
-    # 2. 打印前5只股票的信息（安全版本）
-    print(f"\n前5只股票:")
-    for i, data in enumerate(cerebro.datas[:5]):
-        data_len = len(data)
-        print(f"  {i+1}. {data._name}: {data_len}条数据")
     
     # 4. 检查是否有数据为空的
     empty_data = [d for d in cerebro.datas if len(d) == 0]
@@ -330,13 +331,7 @@ def run_threshold_backtest(
 
       
     
-    cerebro.broker.setcash(initial_cash)
-    cerebro.broker.setcommission(commission=commission)
-    
-    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.02)
-    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+
     
     print(f"\n数据概览:")
     print(f"   股票数: {len(codes)}")
