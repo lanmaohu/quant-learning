@@ -13,7 +13,7 @@ Threshold 阈值策略 - 预置版本
 import backtrader as bt
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import time
 
@@ -46,6 +46,8 @@ class ThresholdStrategy(bt.Strategy):
         self.signals = self.params.signals or {}
         self.counter = 0
         self.trade_log = []
+        self.daily_returns = []  # 每日收益记录
+        self.portfolio_values = []  # 每日组合价值
         
     def log(self, txt, dt=None):
         if self.params.print_log:
@@ -62,13 +64,15 @@ class ThresholdStrategy(bt.Strategy):
             self.log(f'【{action}】{order.data._name}: '
                     f'{abs(order.executed.size)}股 @ {order.executed.price:.2f}')
             
+            # 记录交易（包含买入/卖出标记用于可视化）
             self.trade_log.append({
                 'date': self.datas[0].datetime.date(0),
                 'code': order.data._name,
                 'action': action,
                 'price': order.executed.price,
                 'size': abs(order.executed.size),
-                'value': abs(order.executed.size) * order.executed.price
+                'value': abs(order.executed.size) * order.executed.price,
+                'type': 'buy' if order.isbuy() else 'sell'
             })
         
         self.order = None
@@ -76,8 +80,20 @@ class ThresholdStrategy(bt.Strategy):
     def next(self):
         """每日执行"""
         self.counter += 1
+        
+        # 记录每日组合价值
+        current_date = self.datas[0].datetime.date(0)
+        portfolio_value = self.broker.getvalue()
+        cash = self.broker.getcash()
+        
+        self.portfolio_values.append({
+            'date': current_date,
+            'portfolio_value': portfolio_value,
+            'cash': cash
+        })
+        
         self.log('=' * 60)
-        self.log(f'  每日之星:{self.counter}')
+        self.log(f'  每日执行 #{self.counter}')
         
         # 按频率调仓
         if self.counter % self.config.rebalance_freq != 0:
@@ -102,7 +118,7 @@ class ThresholdStrategy(bt.Strategy):
                 positions[data._name] = pos.size
                 buy_prices[data._name] = pos.price
 
-        self.log(f'  buy_prices: {len(buy_prices)}')
+        self.log(f'  当前持仓: {len(buy_prices)} 只')
         
         # ===== 卖出逻辑 =====
         for code, pred in today_signals:
@@ -167,6 +183,123 @@ class ThresholdStrategy(bt.Strategy):
         self.log('策略结束')
         self.log(f'最终资金: {self.broker.getvalue():,.2f}')
         self.log(f'总收益率: {(self.broker.getvalue()/self.broker.startingcash-1)*100:.2f}%')
+
+
+def create_trade_chart(result: Dict, title: str = "Threshold Strategy", save_path: str = None):
+    """
+    创建交易图表（收益曲线 + 买卖点标记）
+    
+    Parameters:
+    -----------
+    result : dict
+        回测结果字典
+    title : str
+        图表标题
+    save_path : str, optional
+        保存路径
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    from datetime import datetime
+    
+    fig, axes = plt.subplots(3, 1, figsize=(14, 12), gridspec_kw={'height_ratios': [3, 1, 1]})
+    
+    # 获取数据
+    portfolio_df = pd.DataFrame(result.get('portfolio_values', []))
+    if len(portfolio_df) == 0:
+        print("⚠️ 没有组合价值数据，无法绘制图表")
+        return
+    
+    portfolio_df['date'] = pd.to_datetime(portfolio_df['date'])
+    portfolio_df.set_index('date', inplace=True)
+    
+    # 计算累计收益
+    initial_value = result['initial_cash']
+    portfolio_df['cum_return'] = (portfolio_df['portfolio_value'] / initial_value - 1) * 100
+    portfolio_df['daily_return'] = portfolio_df['portfolio_value'].pct_change() * 100
+    
+    # ===== 子图1: 累计收益曲线 + 买卖点 =====
+    ax1 = axes[0]
+    
+    # 绘制收益曲线
+    ax1.plot(portfolio_df.index, portfolio_df['cum_return'], 
+             label='Cumulative Return (%)', color='steelblue', linewidth=2)
+    ax1.axhline(0, color='gray', linestyle='--', alpha=0.5)
+    ax1.fill_between(portfolio_df.index, 0, portfolio_df['cum_return'], 
+                      where=portfolio_df['cum_return'] >= 0, alpha=0.3, color='green')
+    ax1.fill_between(portfolio_df.index, 0, portfolio_df['cum_return'], 
+                      where=portfolio_df['cum_return'] < 0, alpha=0.3, color='red')
+    
+    # 标记买卖点
+    trade_log = result.get('trade_log', [])
+    buy_trades = [t for t in trade_log if t.get('type') == 'buy']
+    sell_trades = [t for t in trade_log if t.get('type') == 'sell']
+    
+    # 买入点（向上三角形）
+    for trade in buy_trades:
+        date = pd.to_datetime(trade['date'])
+        if date in portfolio_df.index:
+            value = portfolio_df.loc[date, 'cum_return']
+            ax1.scatter(date, value, marker='^', color='red', s=100, 
+                       zorder=5, label='Buy' if trade == buy_trades[0] else "")
+    
+    # 卖出点（向下三角形）
+    for trade in sell_trades:
+        date = pd.to_datetime(trade['date'])
+        if date in portfolio_df.index:
+            value = portfolio_df.loc[date, 'cum_return']
+            ax1.scatter(date, value, marker='v', color='green', s=100, 
+                       zorder=5, label='Sell' if trade == sell_trades[0] else "")
+    
+    ax1.set_ylabel('Cumulative Return (%)', fontsize=11)
+    ax1.set_title(f'{title} - Return Curve & Trade Points', fontsize=13, fontweight='bold')
+    ax1.legend(loc='upper left')
+    ax1.grid(True, alpha=0.3)
+    
+    # 添加统计信息文本框
+    stats_text = f"""
+    Total Return: {result['total_return']*100:.2f}%
+    Annual Return: {result.get('annual_return', 0)*100:.2f}%
+    Sharpe Ratio: {result['sharpe_ratio']:.2f}
+    Max Drawdown: {result['max_drawdown']*100:.2f}%
+    Trades: {len(trade_log)}
+    """
+    ax1.text(0.02, 0.98, stats_text, transform=ax1.transAxes, fontsize=9,
+             verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    # ===== 子图2: 每日收益柱状图 =====
+    ax2 = axes[1]
+    colors = ['green' if r >= 0 else 'red' for r in portfolio_df['daily_return']]
+    ax2.bar(portfolio_df.index, portfolio_df['daily_return'], color=colors, alpha=0.6)
+    ax2.axhline(0, color='black', linestyle='-', linewidth=0.5)
+    ax2.set_ylabel('Daily Return (%)', fontsize=11)
+    ax2.set_title('Daily Returns', fontsize=12)
+    ax2.grid(True, alpha=0.3)
+    
+    # ===== 子图3: 持仓数量 & 现金比例 =====
+    ax3 = axes[2]
+    portfolio_df['cash_ratio'] = portfolio_df['cash'] / portfolio_df['portfolio_value'] * 100
+    ax3.plot(portfolio_df.index, portfolio_df['cash_ratio'], 
+             color='orange', linewidth=1.5, label='Cash Ratio (%)')
+    ax3.fill_between(portfolio_df.index, 0, portfolio_df['cash_ratio'], alpha=0.3, color='orange')
+    ax3.set_ylabel('Cash Ratio (%)', fontsize=11)
+    ax3.set_xlabel('Date', fontsize=11)
+    ax3.set_title('Cash Position', fontsize=12)
+    ax3.legend(loc='upper right')
+    ax3.grid(True, alpha=0.3)
+    
+    # 格式化x轴日期
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"✅ 图表已保存: {save_path}")
+    
+    plt.show()
 
 
 def run_threshold_backtest(
@@ -265,7 +398,8 @@ def run_threshold_backtest(
         'sharpe_ratio': sharpe_analyzer.get('sharperatio', 0) or 0,
         'max_drawdown': drawdown_analyzer['max']['drawdown'] if drawdown_analyzer['max'] else 0,
         'trades': trades_analyzer,
-        'trade_log': strat.trade_log
+        'trade_log': strat.trade_log,
+        'portfolio_values': strat.portfolio_values  # 每日组合价值
     }
     
     print("-" * 70)
@@ -298,19 +432,6 @@ def run_threshold_backtest_optimized(
 ) -> Dict:
     """
     运行 Threshold 策略回测（优化版本 - Signals 和 Data 在一个 Loop 中处理）
-    
-    优化点：
-    1. 只遍历一次股票代码，同时构建 signals 和添加 cerebro data
-    2. 提前过滤数据不足的股票
-    3. 减少内存拷贝
-    
-    Parameters:
-    -----------
-    test_df : pd.DataFrame
-        测试数据
-    min_data_days : int
-        最小数据天数要求
-    其他参数同 run_threshold_backtest
     """
     start_time = time.time()
     
@@ -438,6 +559,7 @@ def run_threshold_backtest_optimized(
         'max_drawdown': drawdown_analyzer['max']['drawdown'] if drawdown_analyzer['max'] else 0,
         'trades': trades_analyzer,
         'trade_log': strat.trade_log,
+        'portfolio_values': strat.portfolio_values,
         'n_stocks': n_added,
         'n_signals': total_signals,
         'elapsed_time': total_time
@@ -474,8 +596,6 @@ def run_threshold_backtest_ultra(
 ) -> Dict:
     """
     运行 Threshold 策略回测（超优化版本 - Vectorized GroupBy）
-    
-    使用 Pandas GroupBy 进行向量化处理，避免 Python 层面的循环
     """
     start_time = time.time()
     
@@ -578,6 +698,7 @@ def run_threshold_backtest_ultra(
         'max_drawdown': drawdown_analyzer['max']['drawdown'] if drawdown_analyzer['max'] else 0,
         'trades': trades_analyzer,
         'trade_log': strat.trade_log,
+        'portfolio_values': strat.portfolio_values,
         'elapsed_time': total_time
     }
     
@@ -594,4 +715,6 @@ if __name__ == '__main__':
     print("  1. run_threshold_backtest() - 标准版本（两次groupby）")
     print("  2. run_threshold_backtest_optimized() - 优化版本（single loop）")
     print("  3. run_threshold_backtest_ultra() - 超优化版本（vectorized groupby）")
+    print("  4. create_trade_chart() - 绘制交易图表（收益曲线+买卖点）")
     print("\n推荐使用 run_threshold_backtest_ultra() 获得最佳性能")
+    print("使用 create_trade_chart(result) 可视化回测结果")

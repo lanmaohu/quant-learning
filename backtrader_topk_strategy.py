@@ -16,6 +16,7 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
+import time
 
 
 @dataclass
@@ -67,13 +68,15 @@ class TopKStrategy(bt.Strategy):
                     f'{abs(order.executed.size)}股 @ {order.executed.price:.2f} '
                     f'金额: {order.executed.size * order.executed.price:,.2f}')
             
+            # 记录交易（包含买入/卖出标记用于可视化）
             self.trade_log.append({
                 'date': self.datas[0].datetime.date(0),
                 'code': order.data._name,
                 'action': action,
                 'price': order.executed.price,
                 'size': abs(order.executed.size),
-                'value': abs(order.executed.size) * order.executed.price
+                'value': order.executed.size * order.executed.price,
+                'type': 'buy' if order.isbuy() else 'sell'
             })
         
         self.order = None
@@ -118,16 +121,34 @@ class TopKStrategy(bt.Strategy):
         """每日执行"""
         self.counter += 1
         
+        # 记录每日组合价值
+        current_date = self.datas[0].datetime.date(0)
+        portfolio_value = self.broker.getvalue()
+        cash = self.broker.getcash()
+        
         # 按频率再平衡
         if self.counter % self.config.rebalance_freq != 0:
+            # 只记录组合价值，不调仓
+            self.daily_portfolio.append({
+                'date': current_date,
+                'portfolio_value': portfolio_value,
+                'cash': cash,
+                'n_positions': len(self._get_current_positions()),
+                'rebalanced': False
+            })
             return
-        
-        current_date = pd.Timestamp(self.datas[0].datetime.date(0))
         
         # 获取当日信号
         signals = self._get_current_signals()
         if not signals:
             self.log(f'今日无信号，跳过')
+            self.daily_portfolio.append({
+                'date': current_date,
+                'portfolio_value': portfolio_value,
+                'cash': cash,
+                'n_positions': len(self._get_current_positions()),
+                'rebalanced': False
+            })
             return
         
         # 获取TopK股票
@@ -204,9 +225,10 @@ class TopKStrategy(bt.Strategy):
             'date': current_date,
             'portfolio_value': portfolio_value,
             'cash': cash,
-            'positions': list(current_codes),
+            'positions': list(self._get_current_positions().keys()),
             'topk': list(topk_codes),
-            'n_positions': len(current_codes)
+            'n_positions': len(self._get_current_positions()),
+            'rebalanced': True
         })
     
     def stop(self):
@@ -215,6 +237,133 @@ class TopKStrategy(bt.Strategy):
         self.log('策略结束')
         self.log(f'最终资金: {self.broker.getvalue():,.2f}')
         self.log(f'总收益率: {(self.broker.getvalue()/self.broker.startingcash-1)*100:.2f}%')
+
+
+def create_trade_chart(result: Dict, title: str = "TopK Strategy", save_path: str = None):
+    """
+    创建交易图表（收益曲线 + 买卖点标记）
+    
+    Parameters:
+    -----------
+    result : dict
+        回测结果字典
+    title : str
+        图表标题
+    save_path : str, optional
+        保存路径
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    
+    fig, axes = plt.subplots(3, 1, figsize=(14, 12), gridspec_kw={'height_ratios': [3, 1, 1]})
+    
+    # 获取数据
+    portfolio_df = pd.DataFrame(result.get('daily_portfolio', []))
+    if len(portfolio_df) == 0:
+        print("⚠️ 没有组合价值数据，无法绘制图表")
+        return
+    
+    portfolio_df['date'] = pd.to_datetime(portfolio_df['date'])
+    portfolio_df.set_index('date', inplace=True)
+    
+    # 计算累计收益
+    initial_value = result['initial_cash']
+    portfolio_df['cum_return'] = (portfolio_df['portfolio_value'] / initial_value - 1) * 100
+    portfolio_df['daily_return'] = portfolio_df['portfolio_value'].pct_change() * 100
+    
+    # ===== 子图1: 累计收益曲线 + 买卖点 =====
+    ax1 = axes[0]
+    
+    # 绘制收益曲线
+    ax1.plot(portfolio_df.index, portfolio_df['cum_return'], 
+             label='Cumulative Return (%)', color='steelblue', linewidth=2)
+    ax1.axhline(0, color='gray', linestyle='--', alpha=0.5)
+    ax1.fill_between(portfolio_df.index, 0, portfolio_df['cum_return'], 
+                      where=portfolio_df['cum_return'] >= 0, alpha=0.3, color='green')
+    ax1.fill_between(portfolio_df.index, 0, portfolio_df['cum_return'], 
+                      where=portfolio_df['cum_return'] < 0, alpha=0.3, color='red')
+    
+    # 标记买卖点
+    trade_log = result.get('trade_log', [])
+    buy_trades = [t for t in trade_log if t.get('type') == 'buy']
+    sell_trades = [t for t in trade_log if t.get('type') == 'sell']
+    
+    # 买入点（向上三角形）
+    for trade in buy_trades:
+        date = pd.to_datetime(trade['date'])
+        if date in portfolio_df.index:
+            value = portfolio_df.loc[date, 'cum_return']
+            ax1.scatter(date, value, marker='^', color='red', s=100, 
+                       zorder=5, label='Buy' if trade == buy_trades[0] else "")
+    
+    # 卖出点（向下三角形）
+    for trade in sell_trades:
+        date = pd.to_datetime(trade['date'])
+        if date in portfolio_df.index:
+            value = portfolio_df.loc[date, 'cum_return']
+            ax1.scatter(date, value, marker='v', color='green', s=100, 
+                       zorder=5, label='Sell' if trade == sell_trades[0] else "")
+    
+    # 标记再平衡日
+    rebalance_df = portfolio_df[portfolio_df.get('rebalanced', False)]
+    if len(rebalance_df) > 0:
+        ax1.scatter(rebalance_df.index, portfolio_df.loc[rebalance_df.index, 'cum_return'],
+                   marker='|', color='purple', s=50, alpha=0.5, label='Rebalance')
+    
+    ax1.set_ylabel('Cumulative Return (%)', fontsize=11)
+    ax1.set_title(f'{title} - Return Curve & Trade Points', fontsize=13, fontweight='bold')
+    ax1.legend(loc='upper left')
+    ax1.grid(True, alpha=0.3)
+    
+    # 添加统计信息文本框
+    stats_text = f"""
+    Total Return: {result['total_return']*100:.2f}%
+    Annual Return: {result.get('annual_return', 0)*100:.2f}%
+    Sharpe Ratio: {result['sharpe_ratio']:.2f}
+    Max Drawdown: {result['max_drawdown']*100:.2f}%
+    Trades: {len(trade_log)}
+    """
+    ax1.text(0.02, 0.98, stats_text, transform=ax1.transAxes, fontsize=9,
+             verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    # ===== 子图2: 每日收益柱状图 =====
+    ax2 = axes[1]
+    colors = ['green' if r >= 0 else 'red' for r in portfolio_df['daily_return']]
+    ax2.bar(portfolio_df.index, portfolio_df['daily_return'], color=colors, alpha=0.6)
+    ax2.axhline(0, color='black', linestyle='-', linewidth=0.5)
+    ax2.set_ylabel('Daily Return (%)', fontsize=11)
+    ax2.set_title('Daily Returns', fontsize=12)
+    ax2.grid(True, alpha=0.3)
+    
+    # ===== 子图3: 持仓数量 & 现金比例 =====
+    ax3 = axes[2]
+    portfolio_df['cash_ratio'] = portfolio_df['cash'] / portfolio_df['portfolio_value'] * 100
+    
+    # 绘制现金比例
+    ax3_twin = ax3.twinx()
+    ax3.plot(portfolio_df.index, portfolio_df.get('n_positions', 0), 
+             color='blue', linewidth=1.5, label='Positions')
+    ax3_twin.fill_between(portfolio_df.index, 0, portfolio_df['cash_ratio'], 
+                          alpha=0.3, color='orange', label='Cash Ratio')
+    
+    ax3.set_ylabel('Number of Positions', fontsize=11, color='blue')
+    ax3_twin.set_ylabel('Cash Ratio (%)', fontsize=11, color='orange')
+    ax3.set_xlabel('Date', fontsize=11)
+    ax3.set_title('Positions & Cash', fontsize=12)
+    ax3.grid(True, alpha=0.3)
+    
+    # 格式化x轴日期
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"✅ 图表已保存: {save_path}")
+    
+    plt.show()
 
 
 def run_topk_backtest(
@@ -231,41 +380,7 @@ def run_topk_backtest(
     commission: float = 0.001,
     print_log: bool = True
 ) -> Dict:
-    """
-    运行 TopK 策略回测（简化接口）
-    
-    Parameters:
-    -----------
-    test_df : pd.DataFrame
-        测试数据，包含股票代码、日期、价格、预测分数
-    pred_col : str
-        预测分数列名
-    code_col : str
-        股票代码列名
-    date_col : str
-        日期列名
-    price_col : str
-        价格列名（用于回测）
-    top_k : int
-        每天选择的股票数量
-    rebalance_freq : int
-        再平衡频率（天）
-    equal_weight : bool
-        是否等权重分配
-    position_pct : float
-        资金使用比例
-    initial_cash : float
-        初始资金
-    commission : float
-        手续费率
-    print_log : bool
-        是否打印日志
-    
-    Returns:
-    --------
-    result : dict
-        回测结果字典
-    """
+    """运行 TopK 策略回测（标准版本）"""
     print("=" * 70)
     print("🚀 TopK 策略回测")
     print("=" * 70)
@@ -284,15 +399,6 @@ def run_topk_backtest(
             daily.append((str(row[code_col]), row[pred_col]))
         signals[date] = daily
     
-    # 信号统计
-    print(f"   总交易日数: {len(signals)}")
-    print(f"   日期范围: {min(signals.keys())} ~ {max(signals.keys())}")
-    
-    # 每日信号数量统计
-    signal_counts = [len(daily) for daily in signals.values()]
-    print(f"   每日平均信号数: {np.mean(signal_counts):.1f}")
-    
-    # 创建配置
     config = TopKConfig(
         top_k=top_k,
         rebalance_freq=rebalance_freq,
@@ -301,57 +407,39 @@ def run_topk_backtest(
         equal_weight=equal_weight
     )
     
-    # 创建Cerebro
     cerebro = bt.Cerebro()
-    cerebro.addstrategy(
-        TopKStrategy,
-        config=config,
-        signals=signals,
-        print_log=print_log
-    )
+    cerebro.addstrategy(TopKStrategy, config=config, signals=signals, print_log=print_log)
     
     # 添加数据
     codes = test_df[code_col].unique()
     n_added = 0
-    
     for code in codes:
         stock_df = test_df[test_df[code_col] == code].copy()
         stock_df = stock_df.sort_values(date_col)
         stock_df.set_index(date_col, inplace=True)
-        
         if len(stock_df) < 5:
             continue
-        
-        data = bt.feeds.PandasData(
-            dataname=stock_df,
-            datetime=None,
-            open=price_col, high=price_col, low=price_col, close=price_col,
-            openinterest=-1
-        )
+        data = bt.feeds.PandasData(dataname=stock_df, datetime=None,
+                                   open=price_col, high=price_col, low=price_col, close=price_col,
+                                   openinterest=-1)
         cerebro.adddata(data, name=str(code))
         n_added += 1
     
-    print(f"\n📈 加载了 {n_added} 只股票到回测引擎")
+    print(f"\n📈 加载了 {n_added} 只股票")
     
-    # 设置经纪商
     cerebro.broker.setcash(initial_cash)
     cerebro.broker.setcommission(commission=commission)
     
-    # 添加分析器
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.02)
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
     cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
     
-    # 运行回测
     print(f"\n💰 开始回测...")
-    print("-" * 70)
-    
     results = cerebro.run()
     strat = results[0]
     final_value = cerebro.broker.getvalue()
     
-    # 获取分析结果
     returns_analyzer = strat.analyzers.returns.get_analysis()
     sharpe_analyzer = strat.analyzers.sharpe.get_analysis()
     drawdown_analyzer = strat.analyzers.drawdown.get_analysis()
@@ -370,15 +458,8 @@ def run_topk_backtest(
         'daily_portfolio': strat.daily_portfolio
     }
     
-    print("-" * 70)
-    print(f"💰 最终资金: {final_value:,.2f}")
-    print("\n" + "=" * 70)
-    print("📊 回测结果")
-    print("=" * 70)
-    print(f"总收益率: {result['total_return']*100:.2f}%")
-    print(f"年化收益率: {result['annual_return']*100:.2f}%")
+    print(f"\n总收益率: {result['total_return']*100:.2f}%")
     print(f"夏普比率: {result['sharpe_ratio']:.3f}")
-    print(f"最大回撤: {result['max_drawdown']*100:.2f}%")
     
     return result
 
@@ -398,44 +479,18 @@ def run_topk_backtest_optimized(
     commission: float = 0.001,
     print_log: bool = True
 ) -> Dict:
-    """
-    运行 TopK 策略回测（优化版本 - Signals 和 Data 在一个 Loop 中处理）
+    """运行 TopK 策略回测（优化版本 - Single Loop）"""
+    start_time = time.time()
     
-    优化点：
-    1. 只遍历一次股票代码，同时构建 signals 和添加 cerebro data
-    2. 提前过滤数据不足的股票
-    3. 减少内存拷贝
-    
-    Parameters:
-    -----------
-    test_df : pd.DataFrame
-        测试数据
-    min_data_days : int
-        最小数据天数要求
-    其他参数同 run_topk_backtest
-    
-    Returns:
-    --------
-    result : dict
-        回测结果字典
-    """
     print("=" * 70)
     print("🚀 TopK 策略回测（优化版 - Single Loop）")
     print("=" * 70)
-    print(f"\n策略参数:")
-    print(f"   TopK: 每天选{top_k}只")
-    print(f"   再平衡频率: 每{rebalance_freq}天")
-    print(f"   权重方式: {'等权重' if equal_weight else '按分数加权'}")
-    print(f"   资金使用: {position_pct*100:.0f}%")
-    print(f"   最小数据天数: {min_data_days}")
     
-    # 初始化
-    signals = {}  # {date: [(code, score), ...]}
+    signals = {}
     cerebro = bt.Cerebro()
     
-    # 获取所有唯一股票代码
     all_codes = test_df[code_col].unique()
-    print(f"\n📊 开始处理 {len(all_codes)} 只股票...")
+    print(f"\n📊 处理 {len(all_codes)} 只股票...")
     
     n_added = 0
     n_skipped = 0
@@ -443,98 +498,55 @@ def run_topk_backtest_optimized(
     
     for i, code in enumerate(all_codes):
         if print_log and (i + 1) % 50 == 0:
-            print(f"   处理进度: {i+1}/{len(all_codes)} ({(i+1)/len(all_codes)*100:.1f}%)")
+            print(f"   进度: {i+1}/{len(all_codes)}")
         
-        # 获取单只股票数据
         stock_df = test_df[test_df[code_col] == code].copy()
         
-        # 检查数据量
         if len(stock_df) < min_data_days:
             n_skipped += 1
             continue
         
-        # 排序并设置索引
         stock_df = stock_df.sort_values(date_col)
         
-        # ========== 1. 构建 Signals ==========
-        for date, row in stock_df.iterrows():
-            # 注意：如果 stock_df 已经按 date 排序，这里需要用原始索引
-            pass
-        
-        # 重新正确遍历
+        # 构建 Signals
         for _, row in stock_df.iterrows():
             date = row[date_col]
             score = row[pred_col]
-            
             if date not in signals:
                 signals[date] = []
             signals[date].append((str(code), score))
             total_signals += 1
         
-        # ========== 2. 添加 Data 到 Cerebro ==========
+        # 添加 Data
         stock_df.set_index(date_col, inplace=True)
-        
-        data = bt.feeds.PandasData(
-            dataname=stock_df,
-            datetime=None,
-            open=price_col, 
-            high=price_col, 
-            low=price_col, 
-            close=price_col,
-            openinterest=-1
-        )
+        data = bt.feeds.PandasData(dataname=stock_df, datetime=None,
+                                   open=price_col, high=price_col, low=price_col, close=price_col,
+                                   openinterest=-1)
         cerebro.adddata(data, name=str(code))
         n_added += 1
     
-    print(f"\n✅ 数据处理完成:")
-    print(f"   成功添加: {n_added} 只股票")
-    print(f"   跳过(数据不足): {n_skipped} 只")
-    print(f"   总信号数: {total_signals:,}")
-    print(f"   交易日期: {len(signals)} 天")
+    config = TopKConfig(top_k=top_k, rebalance_freq=rebalance_freq,
+                       max_positions=top_k, position_pct=position_pct, equal_weight=equal_weight)
     
-    if n_added == 0:
-        raise ValueError("没有有效的股票数据，请检查输入数据")
-    
-    # 创建配置
-    config = TopKConfig(
-        top_k=top_k,
-        rebalance_freq=rebalance_freq,
-        max_positions=top_k,
-        position_pct=position_pct,
-        equal_weight=equal_weight
-    )
-    
-    # 添加策略
-    cerebro.addstrategy(
-        TopKStrategy,
-        config=config,
-        signals=signals,
-        print_log=print_log
-    )
-    
-    # 设置经纪商
+    cerebro.addstrategy(TopKStrategy, config=config, signals=signals, print_log=print_log)
     cerebro.broker.setcash(initial_cash)
     cerebro.broker.setcommission(commission=commission)
     
-    # 添加分析器
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.02)
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
     cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
     
-    # 运行回测
-    print(f"\n💰 开始回测...")
-    print("-" * 70)
-    
     results = cerebro.run()
     strat = results[0]
     final_value = cerebro.broker.getvalue()
     
-    # 获取分析结果
     returns_analyzer = strat.analyzers.returns.get_analysis()
     sharpe_analyzer = strat.analyzers.sharpe.get_analysis()
     drawdown_analyzer = strat.analyzers.drawdown.get_analysis()
     trades_analyzer = strat.analyzers.trades.get_analysis()
+    
+    total_time = time.time() - start_time
     
     result = {
         'strategy': 'TopK_Optimized',
@@ -548,18 +560,12 @@ def run_topk_backtest_optimized(
         'trade_log': strat.trade_log,
         'daily_portfolio': strat.daily_portfolio,
         'n_stocks': n_added,
-        'n_signals': total_signals
+        'n_signals': total_signals,
+        'elapsed_time': total_time
     }
     
-    print("-" * 70)
-    print(f"💰 最终资金: {final_value:,.2f}")
-    print("\n" + "=" * 70)
-    print("📊 回测结果")
-    print("=" * 70)
+    print(f"\n总耗时: {total_time:.2f}s")
     print(f"总收益率: {result['total_return']*100:.2f}%")
-    print(f"年化收益率: {result['annual_return']*100:.2f}%")
-    print(f"夏普比率: {result['sharpe_ratio']:.3f}")
-    print(f"最大回撤: {result['max_drawdown']*100:.2f}%")
     
     return result
 
@@ -579,26 +585,18 @@ def run_topk_backtest_ultra_optimized(
     commission: float = 0.001,
     print_log: bool = True
 ) -> Dict:
-    """
-    超优化版本 - 使用 GroupBy 一次性处理
+    """运行 TopK 策略回测（超优化版本 - Vectorized GroupBy）"""
+    start_time = time.time()
     
-    这个版本使用 Pandas GroupBy 进行向量化处理，避免 Python 层面的循环
-    """
     print("=" * 70)
     print("🚀 TopK 策略回测（超优化版 - Vectorized GroupBy）")
     print("=" * 70)
     
-    import time
-    start_time = time.time()
-    
-    # 初始化
     signals = {}
     cerebro = bt.Cerebro()
     
-    # 预处理：排序
     test_df = test_df.sort_values([code_col, date_col]).copy()
     
-    # 使用 GroupBy 高效处理
     n_added = 0
     n_skipped = 0
     
@@ -609,7 +607,6 @@ def run_topk_backtest_ultra_optimized(
             n_skipped += 1
             continue
         
-        # 1. 构建 Signals（向量化）
         dates = group[date_col].values
         scores = group[pred_col].values
         
@@ -618,53 +615,29 @@ def run_topk_backtest_ultra_optimized(
                 signals[date] = []
             signals[date].append((str(code), float(score)))
         
-        # 2. 添加 Data（需要设置索引）
         stock_df = group.set_index(date_col)
-        
-        data = bt.feeds.PandasData(
-            dataname=stock_df,
-            datetime=None,
-            open=price_col, 
-            high=price_col, 
-            low=price_col, 
-            close=price_col,
-            openinterest=-1
-        )
+        data = bt.feeds.PandasData(dataname=stock_df, datetime=None,
+                                   open=price_col, high=price_col, low=price_col, close=price_col,
+                                   openinterest=-1)
         cerebro.adddata(data, name=str(code))
         n_added += 1
     
-    elapsed = time.time() - start_time
-    print(f"✅ 数据处理完成 ({elapsed:.2f}s):")
-    print(f"   成功添加: {n_added} 只股票")
-    print(f"   跳过: {n_skipped} 只")
-    print(f"   信号日期: {len(signals)} 天")
-    
-    # 创建配置和策略
-    config = TopKConfig(
-        top_k=top_k,
-        rebalance_freq=rebalance_freq,
-        max_positions=top_k,
-        position_pct=position_pct,
-        equal_weight=equal_weight
-    )
+    config = TopKConfig(top_k=top_k, rebalance_freq=rebalance_freq,
+                       max_positions=top_k, position_pct=position_pct, equal_weight=equal_weight)
     
     cerebro.addstrategy(TopKStrategy, config=config, signals=signals, print_log=print_log)
     cerebro.broker.setcash(initial_cash)
     cerebro.broker.setcommission(commission=commission)
     
-    # 分析器
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.02)
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
     cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
     
-    # 运行
-    print(f"\n💰 开始回测...")
     results = cerebro.run()
     strat = results[0]
     final_value = cerebro.broker.getvalue()
     
-    # 结果
     returns_analyzer = strat.analyzers.returns.get_analysis()
     sharpe_analyzer = strat.analyzers.sharpe.get_analysis()
     drawdown_analyzer = strat.analyzers.drawdown.get_analysis()
@@ -686,9 +659,8 @@ def run_topk_backtest_ultra_optimized(
         'elapsed_time': total_time
     }
     
-    print(f"\n📊 总耗时: {total_time:.2f}s")
+    print(f"\n总耗时: {total_time:.2f}s")
     print(f"总收益率: {result['total_return']*100:.2f}%")
-    print(f"夏普比率: {result['sharpe_ratio']:.3f}")
     
     return result
 
@@ -696,7 +668,9 @@ def run_topk_backtest_ultra_optimized(
 if __name__ == '__main__':
     print("TopK 策略模块")
     print("\n可用函数:")
-    print("  1. run_topk_backtest() - 标准版本（两次groupby）")
+    print("  1. run_topk_backtest() - 标准版本")
     print("  2. run_topk_backtest_optimized() - 优化版本（single loop）")
     print("  3. run_topk_backtest_ultra_optimized() - 超优化版本（vectorized groupby）")
+    print("  4. create_trade_chart() - 绘制交易图表（收益曲线+买卖点）")
     print("\n推荐使用 run_topk_backtest_ultra_optimized() 获得最佳性能")
+    print("使用 create_trade_chart(result) 可视化回测结果")
