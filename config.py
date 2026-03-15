@@ -1,57 +1,33 @@
 """
-配置文件
-用于存储 API Keys 等配置
+机器学习量化框架配置
 """
 
 import os
-from dotenv import load_dotenv
+from pathlib import Path
 
-# 加载 .env 文件
-load_dotenv()
+# 路径配置
+PROJECT_ROOT = Path(__file__).parent
+# 支持环境变量覆盖，默认使用项目目录下的数据文件
+DATA_PATH = Path(os.getenv('STOCK_DATA_PATH', PROJECT_ROOT / 'data' / 'a_stock_history_price.csv'))
 
-# Tushare Pro Token
-# 优先级: 1. 环境变量 2. .env 文件 3. 手动设置
-TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN", "")
+# 数据参数
+HISTORY_YEARS = 10
+PRED_HORIZON = 5  # 预测未来5天收益率
+TRAIN_RATIO = 0.60
+VAL_RATIO = 0.20
+TEST_RATIO = 0.20
+TOP_K_STOCKS = 10
 
-# GLM 模型配置
-GLM_API_KEY = os.getenv("GLM_API_KEY", "")
-GLM_MODEL = os.getenv("GLM_MODEL", "glm-4")
+# 特征参数
+SEQ_LENGTH = 20  # 时序长度（用于LSTM等模型）
 
-# 其他配置
-DATA_DIR = "./data"
-CACHE_DIR = "./data/cache"
+# 训练参数
+BATCH_SIZE = 256
+EPOCHS = 100
+LEARNING_RATE = 0.001
+PATIENCE = 10
+RANDOM_SEED = 42
 
-
-def check_tushare_token():
-    """检查 Tushare Token 是否配置"""
-    if not TUSHARE_TOKEN or TUSHARE_TOKEN == "你的token请替换这里":
-        print("""
-        ⚠️ Tushare Token 未配置！
-        
-        请按以下步骤配置:
-        
-        方式1 - 修改 .env 文件（推荐）:
-            1. 打开 .env 文件
-            2. 将 TUSHARE_TOKEN=你的token请替换这里
-               改为 TUSHARE_TOKEN=你的真实token
-        
-        方式2 - 设置环境变量:
-            export TUSHARE_TOKEN='你的token'
-        
-        方式3 - 在代码中传入:
-            from utils.data_fetcher import DataFetcher
-            fetcher = DataFetcher(tushare_token='你的token')
-        """)
-        return False
-
-    # 验证 token 前几位格式
-    if len(TUSHARE_TOKEN) < 20:
-        print("⚠️ Token 格式似乎不正确，请检查")
-        return False
-
-    print(f"✅ Tushare Token 已配置 (前10位: {TUSHARE_TOKEN[:10]}...)")
-    return True
-
-
-if __name__ == "__main__":
-    check_tushare_token()
+# 模型保存路径
+MODEL_SAVE_PATH = PROJECT_ROOT / 'models'
+MODEL_SAVE_PATH.mkdir(parents=True, exist_ok=True)
