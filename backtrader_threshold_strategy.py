@@ -26,7 +26,7 @@ class ThresholdConfig:
     max_positions: int = 10          # 最大持仓数
     max_position_size: float = 0.2   # 单只股票最大仓位 (20%)
     rebalance_freq: int = 1          # 调仓频率 (1=每日, 5=每周)
-    use_stop_loss: bool = False      # 是否使用止损
+    use_stop_loss: bool = True      # 是否使用止损
     stop_loss_pct: float = 0.05      # 止损比例 (5%)
 
 
