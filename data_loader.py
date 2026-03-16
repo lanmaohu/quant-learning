@@ -18,16 +18,16 @@ class StockDataLoader:
     # 列名映射标准化
     COLUMN_MAPPING = {
         'stock_code': 'code',
-        'ts_code': 'code',
-        'trade_date': 'date',
-        'price_change_rate': 'pct_change',
+        'code': 'code',
+        'date': 'date',
+        'name': 'name',
+        'price_change_rate': 'price_change_rate',
         'vol': 'volume',
-        'turnover': 'amount',
         'total_mv': 'market_cap',
-        'close_price': 'close',
-        'open_price': 'open',
-        'high_price': 'high',
-        'low_price': 'low',
+        'close': 'close',
+        'open': 'open',
+        'high': 'high',
+        'low': 'low',
     }
     
     def __init__(self, data_path: str):
@@ -58,6 +58,13 @@ class StockDataLoader:
         
         print(f"   原始: {df.shape[0]:,} 行")
         
+        # 打印列名和各列取值样例
+        print(f"\n   列名: {list(df.columns)}")
+        print(f"\n   各列取值样例（前3行）:")
+        print(df.head(3).to_string())
+        print(f"\n   各列数据类型:")
+        print(df.dtypes.to_string())
+        
         # 标准化列名
         df = self._normalize_columns(df)
         
@@ -70,7 +77,7 @@ class StockDataLoader:
             df = df[df['date'] >= cutoff]
         
         # 排序
-        df = df.sort_values(['code', 'date']).reset_index(drop=True)
+        df = df.sort_values(['code', 'date']).reset_index(drop=False)
         
         self.raw_df = df
         print(f"   加载后: {df.shape[0]:,} 行 | {df['code'].nunique()} 只股票")
