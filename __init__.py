@@ -19,7 +19,7 @@ __version__ = "0.1.0"
 
 # 导出主要类
 from data_loader import StockDataLoader, time_series_split
-from feature_engineering import FeatureEngineer
+from features.feature_engineering import FeatureEngineer
 from backtester import Backtester
 
 __all__ = [

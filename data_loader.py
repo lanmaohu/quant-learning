@@ -59,7 +59,7 @@ class StockDataLoader:
         print(f"   原始: {df.shape[0]:,} 行")
         
         # 打印列名和各列取值样例
-        print(f"\n   列名: {list(df.columns)}")
+        print(f"\n   原始列名: {list(df.columns)}")
         print(f"\n   各列取值样例（前3行）:")
         print(df.head(3).to_string())
         print(f"\n   各列数据类型:")
@@ -77,7 +77,7 @@ class StockDataLoader:
             df = df[df['date'] >= cutoff]
         
         # 排序
-        df = df.sort_values(['code', 'date']).reset_index(drop=False)
+        df = df.sort_values(['code', 'date']).reset_index(drop=True)
         
         self.raw_df = df
         print(f"   加载后: {df.shape[0]:,} 行 | {df['code'].nunique()} 只股票")

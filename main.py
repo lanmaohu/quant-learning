@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 
 from config import DATA_PATH, TOP_K_STOCKS
 from data_loader import StockDataLoader, time_series_split
-from feature_engineering import FeatureEngineer
+from features.feature_engineering import FeatureEngineer
 from backtester import Backtester
 
 # 导入模型（可插拔）
