@@ -8,7 +8,7 @@ from pathlib import Path
 # 路径配置
 PROJECT_ROOT = Path(__file__).parent
 # 支持环境变量覆盖，默认使用项目目录下的数据文件
-DATA_PATH = Path(os.getenv('STOCK_DATA_PATH', PROJECT_ROOT / 'data' / 'a_stock_history_price.csv'))
+DATA_PATH = Path(os.getenv('STOCK_DATA_PATH', PROJECT_ROOT / 'data' ))
 
 # 数据参数
 HISTORY_YEARS = 10
