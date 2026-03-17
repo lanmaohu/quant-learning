@@ -257,9 +257,9 @@ class FactorResearchPipeline:
     
     def __init__(self):
         from utils.data_processor import DataProcessor
-        from utils.factor_calculator import FactorPipeline
-        from utils.factor_preprocessor import FactorPreprocessor
-        from utils.factor_analyzer import FactorAnalyzer
+        from features.factor_calculator import FactorPipeline
+        from features.factor_preprocessor import FactorPreprocessor
+        from features.factor_analyzer import FactorAnalyzer
         
         self.data_processor = DataProcessor()
         self.factor_calc = FactorPipeline()
@@ -393,7 +393,7 @@ def test_multi_factor():
     df['composite_ic'] = synthesizer.ic_weighted(df, factor_cols, ic_values)
     
     # 评估合成效果
-    from utils.factor_analyzer import FactorAnalyzer
+    from features.factor_analyzer import FactorAnalyzer
     analyzer = FactorAnalyzer()
     
     print("\n" + "-" * 40)

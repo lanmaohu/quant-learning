@@ -40,7 +40,7 @@ class FeatureEngineer:
         print("\n🔧 构建特征...")
         
         # 导入技术指标计算器
-        from utils.factor_calculator import TechnicalFactorCalculator
+        from features.factor_calculator import TechnicalFactorCalculator
         
         calc = TechnicalFactorCalculator()
         all_features = []
