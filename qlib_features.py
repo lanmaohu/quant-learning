@@ -247,127 +247,107 @@ class QlibFeatureEngineer:
         low = FieldFeature('low')
         volume = FieldFeature('volume')
         
-        # === Alpha 1: 收益率相关 ===
-        # 5日收益率
-        self.add_feature(ReturnsFeature(close, 5), 'alpha_001')
-        # 10日收益率
-        self.add_feature(ReturnsFeature(close, 10), 'alpha_002')
-        # 20日收益率
-        self.add_feature(ReturnsFeature(close, 20), 'alpha_003')
-        # 60日收益率
-        self.add_feature(ReturnsFeature(close, 60), 'alpha_004')
-        
-        # === Alpha 2: 移动平均相关 ===
-        # 价格/5日均线比率
+        # === 收益率因子 ===
+        # 5日/10日/20日/60日收益率（动量信号）
+        self.add_feature(ReturnsFeature(close, 5), 'returns_5d')
+        self.add_feature(ReturnsFeature(close, 10), 'returns_10d')
+        self.add_feature(ReturnsFeature(close, 20), 'returns_20d')
+        self.add_feature(ReturnsFeature(close, 60), 'returns_60d')
+
+        # === 均线趋势因子 ===
         ma5 = MeanFeature(close, 5)
-        self.add_feature(BinaryOpFeature(close, ma5, '/'), 'alpha_005')
-        
-        # 价格/20日均线比率
         ma20 = MeanFeature(close, 20)
-        self.add_feature(BinaryOpFeature(close, ma20, '/'), 'alpha_006')
-        
-        # 5日/20日均线比率
-        self.add_feature(BinaryOpFeature(ma5, ma20, '/'), 'alpha_007')
-        
-        # === Alpha 3: 波动率相关 ===
-        # 20日价格波动率
-        self.add_feature(StdFeature(close, 20), 'alpha_008')
-        # 20日收益率波动率
+        # 价格/5日均线比率：> 1 表示短期强势
+        self.add_feature(BinaryOpFeature(close, ma5, '/'), 'close_ma5_ratio')
+        # 价格/20日均线比率：> 1 表示中期强势
+        self.add_feature(BinaryOpFeature(close, ma20, '/'), 'close_ma20_ratio')
+        # 5日/20日均线比率：均线多头排列信号
+        self.add_feature(BinaryOpFeature(ma5, ma20, '/'), 'ma5_ma20_ratio')
+
+        # === 波动率因子 ===
+        # 20日价格绝对波动（标准差）
+        self.add_feature(StdFeature(close, 20), 'close_std_20d')
+        # 20日收益率波动率（风险度量）
         ret_1 = ReturnsFeature(close, 1)
-        self.add_feature(StdFeature(ret_1, 20), 'alpha_009')
-        
-        # === Alpha 4: 成交量相关 ===
-        # 5日平均成交量
+        self.add_feature(StdFeature(ret_1, 20), 'ret1_std_20d')
+
+        # === 成交量因子 ===
         vol_ma5 = MeanFeature(volume, 5)
-        # 20日平均成交量
         vol_ma20 = MeanFeature(volume, 20)
-        # 量比（5日/20日成交量比）
-        self.add_feature(BinaryOpFeature(vol_ma5, vol_ma20, '/'), 'alpha_010')
-        
-        # 成交量变化率
-        self.add_feature(ReturnsFeature(volume, 5), 'alpha_011')
-        
-        # === Alpha 5: 价格区间相关 ===
-        # 20日最高价
+        # 量比（近5日/近20日均量）：> 1 表示近期放量
+        self.add_feature(BinaryOpFeature(vol_ma5, vol_ma20, '/'), 'vol_ma5_ma20_ratio')
+        # 5日成交量变化率
+        self.add_feature(ReturnsFeature(volume, 5), 'vol_returns_5d')
+
+        # === 价格位置因子 ===
         high_20 = MaxFeature(high, 20)
-        # 20日最低价
         low_20 = MinFeature(low, 20)
-        # 价格在20日区间的位置
+        # 收盘价在20日高低区间的位置（0=底部，1=顶部）
         pos_20 = BinaryOpFeature(
             BinaryOpFeature(close, low_20, '-'),
             BinaryOpFeature(high_20, low_20, '-'),
             '/'
         )
-        self.add_feature(pos_20, 'alpha_012')
-        
-        # === Alpha 6: 动量相关 ===
-        # 5日动量（价格变化）
-        self.add_feature(DeltaFeature(close, 5), 'alpha_013')
-        # 10日动量
-        self.add_feature(DeltaFeature(close, 10), 'alpha_014')
-        
-        # === Alpha 7: 均值回归相关 ===
-        # 价格偏离20日均线程度
+        self.add_feature(pos_20, 'price_pos_20d')
+
+        # === 价格动量因子 ===
+        # 5日/10日价格变化量（趋势延续信号）
+        self.add_feature(DeltaFeature(close, 5), 'close_delta_5d')
+        self.add_feature(DeltaFeature(close, 10), 'close_delta_10d')
+
+        # === 均值回归因子 ===
+        # 价格偏离20日均线的 Z-score（>2 超买，<-2 超卖）
         dev_20 = BinaryOpFeature(
             BinaryOpFeature(close, ma20, '-'),
             StdFeature(close, 20),
             '/'
         )
-        self.add_feature(dev_20, 'alpha_015')
-        
-        # === Alpha 8: 振幅相关 ===
-        # 日振幅
-        amplitude = BinaryOpFeature(
-            BinaryOpFeature(high, low, '-'),
-            close,
-            '/'
-        )
+        self.add_feature(dev_20, 'close_dev_ma20')
+
+        # === 振幅因子 ===
+        # 日振幅 = (high-low)/close（衡量当日波动范围）
+        amplitude = BinaryOpFeature(BinaryOpFeature(high, low, '-'), close, '/')
         # 20日平均振幅
-        self.add_feature(MeanFeature(amplitude, 20), 'alpha_016')
-        
-        # === Alpha 9: 量价相关 ===
-        # 价格变化与成交量相关性（20日）
+        self.add_feature(MeanFeature(amplitude, 20), 'amplitude_mean_20d')
+
+        # === 量价关系因子 ===
+        # 价格变化 × 成交量变化比（量价共振度量）
         close_change = DeltaFeature(close, 1)
-        
-        # 简化版：价格变化 * 成交量变化
         volume_change = DeltaFeature(volume, 1)
         self.add_feature(
             BinaryOpFeature(close_change, BinaryOpFeature(volume_change, FieldFeature('volume'), '/'), '*'),
-            'alpha_017'
+            'pv_correlation'
         )
-        
-        # === Alpha 10: 截面排名特征 ===
-        # 当日收益率排名
-        self.add_feature(RankFeature(ret_1), 'alpha_018')
-        # 5日收益率排名
-        self.add_feature(RankFeature(ReturnsFeature(close, 5)), 'alpha_019')
-        # 成交量排名
-        self.add_feature(RankFeature(volume), 'alpha_020')
-        
-        # === Alpha 11: 技术指标变体 ===
-        # RSI 简化版（5日）
+
+        # === 截面排名因子（控制行业/市值偏差）===
+        # 当日1日收益率截面排名
+        self.add_feature(RankFeature(ret_1), 'ret1_rank')
+        # 5日收益率截面排名
+        self.add_feature(RankFeature(ReturnsFeature(close, 5)), 'ret5_rank')
+        # 成交量截面排名
+        self.add_feature(RankFeature(volume), 'vol_rank')
+
+        # === 技术指标变体 ===
+        # RSI 代理（5日）：rank(avg_gain) 近似 RSI
         gains = BinaryOpFeature(DeltaFeature(close, 1), FieldFeature('close'), '/')
-        # 使用 rank 作为简化
-        self.add_feature(RankFeature(MeanFeature(gains, 5)), 'alpha_021')
-        
-        # 价格加速度（二阶差分）
-        self.add_feature(DeltaFeature(DeltaFeature(close, 5), 5), 'alpha_022')
-        
-        # === Alpha 12: 交叉特征 ===
-        # 收益率 * 波动率
+        self.add_feature(RankFeature(MeanFeature(gains, 5)), 'rsi_proxy_5d')
+        # 价格加速度（二阶差分，捕捉趋势变化速率）
+        self.add_feature(DeltaFeature(DeltaFeature(close, 5), 5), 'close_acceleration')
+
+        # === 交叉因子 ===
+        # 收益率 × 波动率（高收益+低波动 → 高分）
         self.add_feature(
             BinaryOpFeature(ReturnsFeature(close, 5), StdFeature(close, 20), '*'),
-            'alpha_023'
+            'ret5_vol20_cross'
         )
-        
-        # 价格位置 * 成交量变化
+        # 价格位置 × 成交量变化（突破高位+放量 → 高分）
         self.add_feature(
             BinaryOpFeature(pos_20, ReturnsFeature(volume, 5), '*'),
-            'alpha_024'
+            'pos20_volret5_cross'
         )
-        
-        # === Alpha 13: 时序排名 ===
-        # 5日收盘价在20日区间的排名位置
+
+        # === 时序排名因子 ===
+        # 近5日收盘在过去20日价格序列中的位置
         close_rank_20 = BinaryOpFeature(
             BinaryOpFeature(close, MinFeature(RefFeature(close, 5), 20), '-'),
             BinaryOpFeature(
@@ -377,46 +357,46 @@ class QlibFeatureEngineer:
             ),
             '/'
         )
-        self.add_feature(close_rank_20, 'alpha_025')
-        
-        # === Alpha 14: 趋势强度 ===
-        # 短期趋势 vs 长期趋势
+        self.add_feature(close_rank_20, 'close_rank_pos_20d')
+
+        # === 趋势强度因子 ===
+        # 短期趋势/长期趋势比率（> 1 表示短期加速）
         trend_ratio = BinaryOpFeature(
             BinaryOpFeature(close, RefFeature(close, 5), '-'),
             BinaryOpFeature(close, RefFeature(close, 20), '-'),
             '/'
         )
-        self.add_feature(trend_ratio, 'alpha_026')
-        
-        # === Alpha 15: 开盘收盘关系 ===
-        # 开盘/收盘比率
-        self.add_feature(BinaryOpFeature(open_p, close, '/'), 'alpha_027')
-        # (收盘-开盘)/开盘
+        self.add_feature(trend_ratio, 'trend_ratio_5_20')
+
+        # === 开收盘关系因子 ===
+        # 开盘/收盘比率（< 1 表示尾盘强势）
+        self.add_feature(BinaryOpFeature(open_p, close, '/'), 'open_close_ratio')
+        # 日内收益率 = (close-open)/open（尾盘追涨 or 压低）
         self.add_feature(
             BinaryOpFeature(BinaryOpFeature(close, open_p, '-'), open_p, '/'),
-            'alpha_028'
+            'intraday_return'
         )
-        
-        # === Alpha 16: 高低价关系 ===
-        # 收盘价在当日高低区间的位置
+
+        # === 高低价关系因子 ===
+        # 收盘在当日高低区间的位置（0=接近低价，1=接近高价）
         self.add_feature(
             BinaryOpFeature(
                 BinaryOpFeature(close, low, '-'),
                 BinaryOpFeature(high, low, '-'),
                 '/'
             ),
-            'alpha_029'
+            'close_hl_pos'
         )
-        
-        # === Alpha 17: 波动率调整收益率 ===
-        # 夏普比率简化版（5日收益/5日波动）
+
+        # === 波动率调整收益因子 ===
+        # 5日夏普比率代理（收益率/波动率，越高越好）
         self.add_feature(
             BinaryOpFeature(
                 ReturnsFeature(close, 5),
                 StdFeature(close, 5),
                 '/'
             ),
-            'alpha_030'
+            'ret5_std5_ratio'
         )
         
         print(f"✅ 已构建 {len(self.feature_exprs)} 个 Alpha 特征")
@@ -451,11 +431,11 @@ class QlibFeatureEngineer:
                 print(f"   ⚠️ 特征 {name} 计算失败: {e}")
                 df[name] = np.nan
         
-        # 处理无穷值和缺失值
-        alpha_cols = [c for c in df.columns if c.startswith('alpha_')]
-        df[alpha_cols] = df[alpha_cols].replace([np.inf, -np.inf], np.nan)
-        
-        print(f"✅ 特征计算完成，共 {len(alpha_cols)} 个特征")
+        # 处理无穷值和缺失值（使用显式特征名称列表，不再依赖前缀匹配）
+        feature_cols = [n for n in self.feature_names if n in df.columns]
+        df[feature_cols] = df[feature_cols].replace([np.inf, -np.inf], np.nan)
+
+        print(f"✅ 特征计算完成，共 {len(feature_cols)} 个特征")
         return df
     
     def get_feature_names(self) -> List[str]:

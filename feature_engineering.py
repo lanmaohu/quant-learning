@@ -1,3 +1,6 @@
+# DEPRECATED: 请使用 qlib_features.py 中的 QlibFeatureEngineer / QlibFeatureEngineerV2
+# 本模块保留仅供参考，三个 notebook 已全面迁移到 Qlib Alpha 表达式体系
+
 """
 特征工程模块
 """
