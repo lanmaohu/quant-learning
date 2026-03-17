@@ -22,7 +22,7 @@ from features.feature_engineering import FeatureEngineer
 from features.factor_calculator import TechnicalFactorCalculator, FactorPipeline
 from features.factor_analyzer import FactorAnalyzer
 from features.factor_preprocessor import FactorPreprocessor
-from features.multi_factor_model import MultiFactorModel
+from features.multi_factor_model import FactorSynthesizer, MultiFactorStrategy, FactorResearchPipeline
 
 __all__ = [
     "QlibFeatureEngineer",
@@ -33,5 +33,7 @@ __all__ = [
     "FactorPipeline",
     "FactorAnalyzer",
     "FactorPreprocessor",
-    "MultiFactorModel",
+    "FactorSynthesizer",
+    "MultiFactorStrategy",
+    "FactorResearchPipeline",
 ]

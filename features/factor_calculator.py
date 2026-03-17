@@ -14,7 +14,7 @@ except ImportError:
 
 logger = get_logger(__name__)
 
-from .constants import TRADING_DAYS_PER_YEAR
+from utils.constants import TRADING_DAYS_PER_YEAR
 
 
 class TechnicalFactorCalculator:
