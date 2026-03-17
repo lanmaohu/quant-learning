@@ -2,7 +2,7 @@
 sklearn模型实现
 """
 
-from model_base import SklearnModel
+from models.model_base import SklearnModel
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 

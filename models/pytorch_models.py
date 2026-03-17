@@ -3,7 +3,7 @@ PyTorch深度学习模型
 """
 
 import numpy as np
-from model_base import BaseModel
+from models.model_base import BaseModel
 
 
 class MLPModel(BaseModel):

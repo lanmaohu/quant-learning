@@ -6,7 +6,7 @@
 - pytorch_models: MLPModel, LSTMModel
 """
 
-from model_base import BaseModel
+from models.model_base import BaseModel
 from models.sklearn_models import RidgeRegressionModel, RandomForestModel, XGBoostModel, LightGBMModel
 
 try:
